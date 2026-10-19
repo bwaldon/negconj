@@ -190,3 +190,21 @@ Also a mis-coordination: 29/214(d).
 - Billing (Modal, app negconj, 2026-10-19, pilot + measurement + deploy): L4 $0.346
   (≈1,557 L4-s billed vs 1,172 s reported by completed calls: startup + preempted attempts),
   memory $0.203, CPU $0.142 → **≈ $0.69**. Month metered $1.02, all covered by credits.
+
+### Full-corpus extraction (orchestrate run=full, stop_after=extract; call fc-01M5B0GCCB8FH127M9EHHZWB2G, commit f83b6b9)
+- Release point **119-121** (OLRC download page reports 119-121 as current).
+  `xml_uscAll@119-121.zip` SHA-256 recorded in `/data/raw/release_119-121_All.json` and the run manifest.
+- 56 title files; 266,232 units; prefilter: 60,809 units, 25,054 sections, **60,843,487 chars**.
+- Units with `section = None`: 2,558, all in appendices: 11a (961; prefilter 154 units, 88,820 chars),
+  18a (443), 28a (1,154; prefilter 233 units, 179,596 chars). These are court rules, not sections.
+  Each title's no-section units form one `{title}/_nosection` key and so one indivisible batch.
+- Largest by prefilter chars: 42 (12.0 M), 26 (5.0 M), 15 (4.0 M), 16 (3.6 M), 12 (3.0 M), 07 (2.9 M).
+- Title labels follow the zip's file names (`usc07.xml` → "07").
+
+### Cost projection (§4.3)
+- Pilot: 1,172 reported GPU-s / 2.68 M prefilter chars = 4.4e-4 s/char (includes model loading on
+  cold containers); billed L4 time was 1.33× reported.
+- Full corpus: 60.84 M chars → ≈ 26,600 reported GPU-s → ≈ 35,400 billed L4-s ≈ **$7.9 L4** + CPU/memory
+  ≈ **$9–11 total**. Under the remaining Starter credit (~$29), and the user set no lower cap.
+- Launch settings: `target_chars=2,000,000` (≈ 15 min GPU per shard), GPU budget stop at
+  **45,000 reported GPU-s** (≈1.7× projection; worst case ≈ $13 L4).
