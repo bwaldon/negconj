@@ -126,3 +126,32 @@ False-positive patterns:
 3. **"between X and Y" ranges and coordinations inside relative clauses/modifiers.** These count because
    C2 asks only for dominance (18/5037(d)(2) "between [18 and 21] years"; 29/1461(b)).
 Also a mis-coordination: 29/214(d).
+
+### Decision: switch to the transformer parser (user, 2026-10-19)
+- The user chose Stanza's transformer-backed parser. Configuration (Stanza's `default_accurate`
+  pairing for these two processors): pos `combined_electra-large`, constituency
+  `ptb3-revised_electra-large`, transformer `google/electra-large-discriminator`. Tokenizer
+  unchanged (`combined_nocharlm`), so segmentation and sent_ids are unchanged.
+  `parse.PARSER_CONFIGS["charlm"]` keeps the old setup selectable. Added pin `transformers==5.20.2`.
+- Long inputs: ELECTRA's limit is 512 subwords. Stanza's `build_cloned_features` handles longer
+  sentences with overlapping 512-subword windows (20-subword left context) and stitches the
+  embeddings. Sentences past ~500 subwords therefore get contextual embeddings from local windows
+  only. The longest match (2,204 tokens) parses without error (98 s on MPS).
+- Speed (40-sentence sample, 5,245 tokens): CPU 64.9 s (81 tok/s), about 4.5× slower than charlm.
+  MPS 69.3 s, no faster. CPU and MPS trees identical (40/40).
+- Trees differ from charlm on 40/40 sample sentences; the sentence flag changes on 3/40 (15 → 16).
+- **Pulsifer under ELECTRA:** the key pair ("does not have" × "; and (C)") is **C2 strict True,
+  relaxed True**. Caveat: the coordination node is one flat 8-member NP under "have" containing
+  (A), (B), (C) *and* paragraphs (2)–(5). Right for (A)–(C), but the bracketing is too wide.
+- The 10 charlm-flagged sentences under ELECTRA: 3 false positives become unflagged (18/3626(g)
+  chapeau overreach, 18/3174(d)(2) "not later than", 29/1461(b) relative clause). 5037(d)(2)
+  "between 18 and 21" and 29/214(d) mis-coordination remain flagged. The 5 clean hits stay flagged.
+- Modal image now also bakes in the ELECTRA Stanza models and HF weights (`HF_HOME=/opt/hf`,
+  `HF_HUB_OFFLINE=1` at runtime).
+- charlm local results kept in `data/local_charlm/`; the local reference is being rerun with ELECTRA.
+- User decision: skip the local ELECTRA reference run (stopped partway; partial output in
+  `data/local_electra_partial/`) and go to Modal. The pilot comparison (§4.4) can therefore check
+  units, sentences and regex matches against the local charlm run (segmentation is identical),
+  but not trees.
+
+## Phase 2 — Modal setup and pilot (2026-10-19)
