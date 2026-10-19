@@ -98,7 +98,8 @@ def download(release: str | None = None, titles: list[str] | None = None) -> dic
     return rec
 
 
-@app.function(volumes=VOLS, cpu=2, memory=32768, timeout=3600, nonpreemptible=True)
+# Pilot: peak RSS 2.4 GiB for Title 42 (the largest), 1.3 GiB for Title 26.
+@app.function(volumes=VOLS, cpu=2, memory=8192, timeout=3600, nonpreemptible=True)
 def extract_title(release: str, xml_name: str, run: str) -> dict:
     import resource
     from negconj.stages import extract_stage
@@ -188,9 +189,11 @@ def _shard_complete(root: Path, shard_id: str, sections: list[str]) -> bool:
 @app.function(volumes=VOLS, cpu=1, memory=4096, timeout=24 * 3600, nonpreemptible=True)
 def orchestrate(run: str = "full", release: str | None = None, titles: list[str] | None = None,
                 target_chars: int = 400_000, gpu_budget_seconds: float = 36_000,
-                git_commit: str = "unknown", min_matches: int = 32) -> dict:
+                git_commit: str = "unknown", min_matches: int = 32,
+                stop_after: str | None = None) -> dict:
     """Run every stage in order; skip what is done; stop launching shards
-    once reported GPU seconds pass ``gpu_budget_seconds``."""
+    once reported GPU seconds pass ``gpu_budget_seconds``. ``stop_after="extract"``
+    returns after extraction (per-title prefilter sizes, for cost projection)."""
     from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
     from negconj.shards import title_sort_key
 
@@ -218,8 +221,12 @@ def orchestrate(run: str = "full", release: str | None = None, titles: list[str]
     # 2. extract (parallel, one call per title)
     ex = list(extract_title.map([release] * len(xmls), xmls, [run] * len(xmls)))
     state["stages"]["extract"] = {e["title"]: e for e in ex}
-    log(f"extracted {len(ex)} titles, {sum(e['units'] for e in ex)} units")
+    log(f"extracted {len(ex)} titles, {sum(e['units'] for e in ex)} units, "
+        f"{sum(e['prefilter_chars'] for e in ex)} prefilter chars")
     all_titles = sorted((e["title"] for e in ex), key=title_sort_key)
+    if stop_after == "extract":
+        return {"status": "stopped_after_extract", "release": release, "zips": rec["zips"],
+                "extract": state["stages"]["extract"]}
 
     # 3. plan
     plan = plan_shards.remote(run, target_chars, all_titles)

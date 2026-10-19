@@ -1,9 +1,10 @@
+*.egg-info/
+.DS_Store
 .env
+.pytest_cache/
 .venv/
+__pycache__/
 data/
 results/
 results_*/
-__pycache__/
-*.egg-info/
-.pytest_cache/
-.DS_Store
+results_pilot*/

@@ -37,6 +37,8 @@ def main() -> None:
     ap.add_argument("--gpu-budget-seconds", type=float, required=False, default=3600)
     ap.add_argument("--measure-extract", nargs="*", default=None,
                     help="only extract these titles to measure memory/runtime")
+    ap.add_argument("--stop-after", default=None, choices=["extract"],
+                    help="stop the orchestrator after this stage")
     ap.add_argument("--no-deploy", action="store_true")
     a = ap.parse_args()
 
@@ -51,7 +53,7 @@ def main() -> None:
         fn = modal.Function.from_name("negconj", "orchestrate")
         call = fn.spawn(run=a.run, release=a.release, titles=a.titles,
                         target_chars=a.target_chars, gpu_budget_seconds=a.gpu_budget_seconds,
-                        git_commit=commit, min_matches=a.min_matches)
+                        git_commit=commit, min_matches=a.min_matches, stop_after=a.stop_after)
     print(f"spawned {fn.object_id if hasattr(fn, 'object_id') else ''} call {call.object_id} "
           f"(commit {commit[:10]}). Follow with: modal app logs negconj")
     (ROOT / "data").mkdir(exist_ok=True)

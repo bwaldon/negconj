@@ -30,9 +30,13 @@ def extract_stage(xml: Path, root: Path) -> dict:
         atomic_write_parquet(elements, e_out)
         atomic_write_parquet(units, u_out)  # written last: its presence marks completion
     units = pd.read_parquet(u_out)
+    pre = prefilter(units)
     return {"title": title, "units": len(units),
             "units_by_source": units["elem_source"].value_counts().to_dict(),
-            "no_section": int(units["section"].isna().sum())}
+            "no_section": int(units["section"].isna().sum()),
+            "prefilter_units": len(pre),
+            "prefilter_sections": int(pre["section_key"].nunique()),
+            "prefilter_chars": int(pre["text_parse"].str.len().sum())}
 
 
 def titles_on_disk(root: Path) -> list[str]:

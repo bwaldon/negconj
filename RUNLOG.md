@@ -161,3 +161,32 @@ Also a mis-coordination: 29/214(d).
   end, so two preemptions in the pilot discarded whole shards of parsing.
 - Default `min_matches` is now **32** (run_shard, Modal functions, launch.py, run_local.py):
   a preemption loses at most one small batch. Takes effect at the next deploy (after the pilot).
+
+### Pilot run (Titles 29 + 18 on Modal; orchestrator call fc-01M5AZTZM6WTB544CZN83KZ1BB, commit 8b1d282)
+- Deploy: needed the Modal token from `.env` (`scripts/modal_env.sh` exports it without echoing;
+  `modal profile current` named a profile with no stored token). Slip: `modal token info` printed
+  the token *ID* (not the secret) once in tool output.
+- Image built in ~265 s (CUDA torch, Stanza charlm + ELECTRA models, HF ELECTRA weights).
+- OLRC page moved: `/download/download.html` → `/download.html`. The pilot logged "site current =
+  None"; fixed in 151a7e2 (detects 119-121; the stale 404-page banner said 119-120).
+- 2 GPU preemptions. With `min_matches=256` (pre-86fb756) those attempts lost whole shards; the
+  retries completed. Merge dropped 0 duplicate rows.
+- Results: extraction 9,157 units; plan 8 shards / 1,070 sections; 5,853 raw splits → 352 merged →
+  5,501 sentences; 1,616 matches; **1,616 parsed, 0 failures**; 12,055 pairs; **flagged 487**,
+  relaxed 488 (ELECTRA; local charlm gave 504 / 507). Report checks all OK; 14 checksums verified
+  after `scripts/pull_results.sh pilot` (script fixed: `modal volume get` with a destination path
+  created an empty file and failed).
+- Comparison with local Phase 1: units (both titles), segments, match sent_ids and tokens
+  **identical**. Trees: local reference was charlm, so instead L4 vs local-CPU ELECTRA was compared
+  on the 51 sentences parsed locally with ELECTRA (40-sentence sample, 10 flagged, Pulsifer):
+  **51/51 identical**. No GPU/CPU numeric differences observed.
+- **Pulsifer (pilot, ELECTRA on L4): flagged True / relaxed True; key pair ("does not have" ×
+  "; and (C)") C2 strict True, relaxed True**, coord NP with 8 members (same caveat as above).
+- Extract sizing (`measure_extract`, Titles 26 & 42): T26 17,365 units, 22 s, peak 1.3 GiB;
+  T42 48,428 units, 51 s, peak 2.4 GiB. `extract_title` memory lowered 32 → 8 GiB.
+- GPU time per shard (s): 18-000 220, 18-001 257, 18-002 174, 18-003 10 (warm), 29-000 131,
+  29-001 86 (warm), 29-002 180, 29-003 114; total 1,172 s reported for 2.68 M prefilter chars,
+  255,123 matched tokens.
+- Billing (Modal, app negconj, 2026-10-19, pilot + measurement + deploy): L4 $0.346
+  (≈1,557 L4-s billed vs 1,172 s reported by completed calls: startup + preempted attempts),
+  memory $0.203, CPU $0.142 → **≈ $0.69**. Month metered $1.02, all covered by credits.
