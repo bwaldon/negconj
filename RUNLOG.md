@@ -155,3 +155,9 @@ Also a mis-coordination: 29/214(d).
   but not trees.
 
 ## Phase 2 — Modal setup and pilot (2026-10-19)
+
+### Checkpoint granularity (user-approved change)
+- Pilot finding: with `min_matches=256`, a pilot shard (~200–250 matches) checkpointed only at its
+  end, so two preemptions in the pilot discarded whole shards of parsing.
+- Default `min_matches` is now **32** (run_shard, Modal functions, launch.py, run_local.py):
+  a preemption loses at most one small batch. Takes effect at the next deploy (after the pilot).

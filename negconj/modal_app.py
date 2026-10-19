@@ -125,7 +125,7 @@ _MODELS: dict = {}
 
 @app.function(volumes=VOLS, gpu="L4", timeout=2 * 3600, retries=3,
               max_containers=MAX_GPU_CONTAINERS)
-def process_shard(run: str, shard_id: str, min_matches: int = 256) -> dict:
+def process_shard(run: str, shard_id: str, min_matches: int = 32) -> dict:
     """Preemptible GPU worker; resumes from /progress on restart."""
     import pandas as pd
     import torch
@@ -188,7 +188,7 @@ def _shard_complete(root: Path, shard_id: str, sections: list[str]) -> bool:
 @app.function(volumes=VOLS, cpu=1, memory=4096, timeout=24 * 3600, nonpreemptible=True)
 def orchestrate(run: str = "full", release: str | None = None, titles: list[str] | None = None,
                 target_chars: int = 400_000, gpu_budget_seconds: float = 36_000,
-                git_commit: str = "unknown", min_matches: int = 256) -> dict:
+                git_commit: str = "unknown", min_matches: int = 32) -> dict:
     """Run every stage in order; skip what is done; stop launching shards
     once reported GPU seconds pass ``gpu_budget_seconds``."""
     from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait

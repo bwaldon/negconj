@@ -146,7 +146,7 @@ def _batches(sections: list[str], sents_by_section: Callable[[str], pd.DataFrame
 
 
 def run_shard(shard_id: str, sections: list[str], units: pd.DataFrame, root: Path,
-              tokenizer, parser, *, min_matches: int = 256, seg_chunk: int = 64,
+              tokenizer, parser, *, min_matches: int = 32, seg_chunk: int = 64,
               commit: Callable[[], None] = lambda: None,
               hook: Callable[[str, int], None] = lambda stage, k: None) -> dict:
     """Process one shard; resumable. ``units`` are the prefiltered units of

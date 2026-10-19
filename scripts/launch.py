@@ -33,7 +33,7 @@ def main() -> None:
     ap.add_argument("--titles", nargs="*", default=None, help="restrict to these titles")
     ap.add_argument("--release", default=None, help="release point, e.g. 119-121 (default: current)")
     ap.add_argument("--target-chars", type=int, default=400_000)
-    ap.add_argument("--min-matches", type=int, default=256)
+    ap.add_argument("--min-matches", type=int, default=32)
     ap.add_argument("--gpu-budget-seconds", type=float, required=False, default=3600)
     ap.add_argument("--measure-extract", nargs="*", default=None,
                     help="only extract these titles to measure memory/runtime")

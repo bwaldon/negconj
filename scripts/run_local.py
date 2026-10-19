@@ -74,7 +74,7 @@ def main() -> None:
     ap.add_argument("--xml-dir", type=Path, default=Path("data/raw"))
     ap.add_argument("--titles", nargs="+", default=["29", "18"])
     ap.add_argument("--target-chars", type=int, default=400_000)
-    ap.add_argument("--min-matches", type=int, default=256)
+    ap.add_argument("--min-matches", type=int, default=32)
     ap.add_argument("--smoke", type=int, default=0)
     a = ap.parse_args()
     if a.smoke:
