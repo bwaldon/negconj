@@ -208,3 +208,26 @@ Also a mis-coordination: 29/214(d).
   ≈ **$9–11 total**. Under the remaining Starter credit (~$29), and the user set no lower cap.
 - Launch settings: `target_chars=2,000,000` (≈ 15 min GPU per shard), GPU budget stop at
   **45,000 reported GPU-s** (≈1.7× projection; worst case ≈ $13 L4).
+
+## Phase 3 — full run (orchestrator call fc-01M5B0KW1HNH3Y0K6MVP2NV1TT, commit 4e53ed0)
+- 72 shards planned (target 2 M chars). 69 completed with 0 parse failures: 41,559 trees,
+  29,583 reported GPU-s. Cost at 22:05 UTC: L4 $5.84, memory $1.63, CPU $1.09 (billing lags).
+- **Stuck:** shards 34-000, 42-001, 42-002 stopped progressing (no new sections 22:45 → 22:54 UTC).
+  Logs show CUDA OOM on sentences up to ~21k subwords, then the CPU fallback exceeding the
+  container's memory ("Runner was terminated while exceeding its memory request"). The container
+  restarts and re-hits the same batch. The GPU budget stop counts only completed shards, so it cannot
+  catch this loop.
+- My `modal app stop negconj` was blocked by the permission system; the user was asked to stop the app.
+- Local scan of the stuck shards' remaining sections: 2,150 matches; longest matched sentences
+  42 U.S.C. 1396a (19,468 tokens), 34 U.S.C. 11133 (6,109), 42 U.S.C. 671 (6,104),
+  42 U.S.C. 1395l (5,215), 42 U.S.C. 1396d (2,767); every other one ≤ 2,451.
+  Proposed (awaiting the user): a token cap (e.g. 2,500) with over-long sentences recorded as
+  failures; no CPU retry for oversized inputs; budget stop that also counts in-flight shards.
+
+### Partial results pulled (`results_full_partial/`)
+- Merged locally from the 69 completed shards (Titles 34 and 42 only partly covered).
+  41,559 matches = 41,559 parses, 0 failures, 0 duplicates; 278,434 pairs; flagged 12,425,
+  relaxed 12,444. Consistency checks OK (for the completed shards); local checksums verified.
+- Pulsifer: flagged True / relaxed True (same as pilot).
+- Flagged sentences with a strict pair inside an if-clause: 972.
+- Dashboard: `results_full_partial/dashboard.html` (flagged only, 41.8 MB).
