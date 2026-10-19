@@ -23,16 +23,24 @@ MAX_GPU_CONTAINERS = 10  # Starter plan GPU concurrency; v2 Volume
 
 PINNED = [
     "beautifulsoup4==4.15.0", "lxml==6.1.3", "pandas==3.0.6", "pyarrow==26.0.0",
-    "stanza==1.15.0", "nltk==3.10.3", "tqdm==4.70.1",
+    "stanza==1.15.0", "transformers==5.20.2", "nltk==3.10.3", "tqdm==4.70.1",
 ]
+HF_HOME = "/opt/hf"
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install(*PINNED)
-    .env({"STANZA_RESOURCES_DIR": STANZA_DIR})
+    .env({"STANZA_RESOURCES_DIR": STANZA_DIR, "HF_HOME": HF_HOME})
+    # Every model in parse.PARSER_CONFIGS, plus ELECTRA's weights, baked into the image.
     .run_commands(
-        "python -c \"import stanza; stanza.download('en', "
-        "processors='tokenize,mwt,pos,constituency', model_dir='" + STANZA_DIR + "')\"")
+        "python -c \"import stanza; "
+        "stanza.download('en', processors='tokenize,mwt,pos,constituency', model_dir='" + STANZA_DIR + "'); "
+        "stanza.download('en', processors={'pos': 'combined_electra-large', "
+        "'constituency': 'ptb3-revised_electra-large'}, model_dir='" + STANZA_DIR + "'); "
+        "from transformers import AutoModel, AutoTokenizer; "
+        "AutoTokenizer.from_pretrained('google/electra-large-discriminator'); "
+        "AutoModel.from_pretrained('google/electra-large-discriminator')\"")
+    .env({"HF_HUB_OFFLINE": "1"})
     .add_local_python_source("negconj")
 )
 

@@ -16,20 +16,36 @@ from nltk.tree import Tree
 
 PROCESSORS = "tokenize,mwt,pos,constituency"
 
+# Processor -> Stanza package. "electra" is Stanza's default_accurate pairing for
+# pos + constituency; "charlm" is Stanza's default. The tokenizer is unused
+# (input is pretokenized) and kept equal to segment.py's.
+PARSER_CONFIGS = {
+    "electra": {"tokenize": "combined_nocharlm", "mwt": "combined",
+                "pos": "combined_electra-large", "constituency": "ptb3-revised_electra-large"},
+    "charlm": {"tokenize": "combined_nocharlm", "mwt": "combined",
+               "pos": "combined_charlm", "constituency": "ptb3-revised_charlm"},
+}
+DEFAULT_PARSER = "electra"
 
-def build_pipeline(use_gpu: bool):
+
+def build_pipeline(use_gpu: bool, config: str = DEFAULT_PARSER):
     import stanza
-    return stanza.Pipeline("en", processors=PROCESSORS, tokenize_pretokenized=True,
+    return stanza.Pipeline("en", processors=PARSER_CONFIGS[config], tokenize_pretokenized=True,
                            use_gpu=use_gpu, logging_level="WARN", download_method=None)
 
 
 def model_package(nlp) -> str:
-    """e.g. 'tokenize=combined_nocharlm;mwt=combined;pos=combined_charlm;constituency=ptb3-revised_charlm'."""
+    """e.g. 'tokenize=combined_nocharlm;mwt=combined;pos=combined_electra-large;
+    constituency=ptb3-revised_electra-large;transformer=google/electra-large-discriminator'."""
     parts = []
     for name in PROCESSORS.split(","):
         proc = nlp.processors.get(name)
         if proc is not None:
             parts.append(f"{name}={Path(proc.config['model_path']).stem}")
+    con = nlp.processors.get("constituency")
+    bert = getattr(getattr(con, "_model", None), "args", {}).get("bert_model") if con else None
+    if bert:
+        parts.append(f"transformer={bert}")
     return ";".join(parts)
 
 
@@ -47,10 +63,11 @@ def _free_gpu() -> None:
 
 
 class Parser:
-    def __init__(self, use_gpu: bool, sub_batch_tokens: int = 6000):
+    def __init__(self, use_gpu: bool, sub_batch_tokens: int = 6000, config: str = DEFAULT_PARSER):
         import stanza
         self.use_gpu = use_gpu
-        self.nlp = build_pipeline(use_gpu)
+        self.config = config
+        self.nlp = build_pipeline(use_gpu, config)
         self._cpu = None if use_gpu else self.nlp
         self.sub_batch_tokens = sub_batch_tokens
         self.stanza_version = stanza.__version__
@@ -60,7 +77,7 @@ class Parser:
     @property
     def cpu(self):
         if self._cpu is None:
-            self._cpu = build_pipeline(False)
+            self._cpu = build_pipeline(False, self.config)
         return self._cpu
 
     @staticmethod
