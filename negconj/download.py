@@ -13,7 +13,7 @@ import zipfile
 from pathlib import Path
 
 BASE = "https://uscode.house.gov/download/"
-DOWNLOAD_PAGE = BASE + "download.html"
+DOWNLOAD_PAGE = "https://uscode.house.gov/download.html"  # moved from /download/download.html
 DEFAULT_RELEASE = "119-121"
 _ALL_RE = re.compile(r"releasepoints/us/pl/(\d+)/(\d+[a-z]*)/xml_uscAll@(\d+-\d+[a-z]*)\.zip")
 USER_AGENT = "negconj-research/0.1 (statutory corpus study)"
