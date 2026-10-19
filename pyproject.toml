@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "negconj"
+version = "0.1.0"
+description = "Negative conjunctions (… not … and …) in the U.S. Code: extraction, Stanza parsing, C2 classification"
+requires-python = ">=3.12"
+dependencies = [
+    "modal==1.6.2",
+    "beautifulsoup4==4.15.0",
+    "lxml==6.1.3",
+    "pandas==3.0.6",
+    "pyarrow==26.0.0",
+    "stanza==1.15.0",
+    "nltk==3.10.3",
+    "tqdm==4.70.1",
+    "pytest==9.1.1",
+]
+
+[tool.setuptools]
+packages = ["negconj"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
