@@ -107,12 +107,14 @@ aside { border-right: 1px solid var(--rule); display: flex; flex-direction: colu
 .legend .l-vp::before { background: var(--neg-soft); border: 1px solid var(--neg); }
 .legend .l-conj::before { background: var(--conj); }
 .legend .l-coord::before { border-bottom: 2px solid var(--conj); height: 6px; }
+.legend .l-if::before { content: "⟦ ⟧"; width: auto; height: auto; color: var(--accent); font-weight: 700; }
 
 .text { font: 17px/1.75 var(--font-text); max-width: 75ch; overflow-wrap: anywhere; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 20px; }
 .text .t-vp { background: var(--neg-soft); }
 .text .t-coord { box-shadow: inset 0 -2px 0 var(--conj); }
 .text .t-not { color: var(--neg); font-weight: 600; }
 .text .t-and { color: var(--conj); font-weight: 600; }
+.text .t-if { color: var(--accent); font-weight: 700; font-family: var(--font-ui); }
 .text details { margin-top: 10px; font: 13px/1.5 var(--font-ui); color: var(--muted); }
 .text details p { font: 14px/1.6 var(--font-text); color: var(--ink); margin: 6px 0 0; }
 
@@ -150,6 +152,8 @@ svg.tree .negvp text { fill: var(--neg); }
 svg.tree .coord rect { fill: var(--conj-soft); stroke: var(--conj); }
 svg.tree .coord text { fill: var(--conj); }
 svg.tree .lca text.lbl { text-decoration: underline; }
+svg.tree .ifc rect { fill: var(--accent-soft); stroke: var(--accent); }
+svg.tree .ifc text { fill: var(--accent); }
 
 .outline { font: 12.5px/1.6 var(--font-mono); }
 .outline details { margin-left: 14px; }
@@ -196,6 +200,10 @@ kbd { font: 11px var(--font-mono); border: 1px solid var(--rule); border-bottom-
         <option value="all">All matches</option>
       </select></label>
       <label for="f-title">Title<select id="f-title"><option value="">All titles</option></select></label>
+      <label class="wide" for="f-clause">Where the pair sits<select id="f-clause">
+        <option value="if">Inside an if-clause (not and the coordination both in it)</option>
+        <option value="">Anywhere in the sentence</option>
+      </select></label>
       <label for="f-src">Unit type<select id="f-src"><option value="">All</option></select></label>
       <label for="f-review">My review<select id="f-review">
         <option value="">Any</option><option value="none">Not reviewed</option>
@@ -259,12 +267,40 @@ function pairNodes(row, pair) {
   return { root, pts, notN, cc, coord: cc.parent, negVP: notN.parent, relaxedVP: relaxedParent(notN), top: lca(notN, cc.parent) };
 }
 
+/* ---------- if-clauses ---------- */
+// An if-clause is an SBAR whose first word is "if" (also "only if", "even if").
+function isIfClause(n) {
+  if (!n.label.startsWith("SBAR") || n.word !== undefined) return false;
+  const { pts } = parseTree(n._tree);
+  const w0 = (pts[n.lo] || {}).word, w1 = (pts[n.lo + 1] || {}).word;
+  const a = (w0 || "").toLowerCase(), b = (w1 || "").toLowerCase();
+  return a === "if" || ((a === "only" || a === "even") && b === "if");
+}
+function ifClauseOf(row, pair) {
+  const nd = pairNodes(row, pair);
+  for (let a = nd.notN.parent; a; a = a.parent) {
+    a._tree = row.tree;
+    if (isIfClause(a)) { for (let x = nd.coord; x; x = x.parent) if (x === a) return a; }
+  }
+  return null;
+}
+function pairCounts(p) {
+  if (st.status === "flagged") return p.strict;
+  if (st.status === "relaxed" || st.status === "any") return p.strict || p.rel;
+  return true;
+}
+const ifCache = new Map();
+function ifPairs(row) {
+  if (!ifCache.has(row.id)) ifCache.set(row.id, row.pairs.map((p, i) => ifClauseOf(row, p) ? i : -1).filter(i => i >= 0));
+  return ifCache.get(row.id).filter(i => pairCounts(row.pairs[i]));
+}
+
 /* ---------- state ---------- */
 const KEY = "negconj-review:" + DATA.run;
 let reviews = {};
 try { reviews = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { reviews = {}; }
 function saveReviews() { try { localStorage.setItem(KEY, JSON.stringify(reviews)); } catch (e) { /* storage unavailable */ } }
-const st = { q: "", status: "flagged", title: "", src: "", review: "", coord: "", limit: 300, sel: null, pair: 0, view: "focus", expandAll: false, open: new Set() };
+const st = { clause: "if", q: "", status: "flagged", title: "", src: "", review: "", coord: "", limit: 300, sel: null, pair: 0, view: "focus", expandAll: false, open: new Set() };
 
 /* ---------- header + filters ---------- */
 function natKey(t) { const m = /^(\d+)(.*)$/.exec(t); return m ? [+m[1], m[2]] : [1e9, t]; }
@@ -284,9 +320,9 @@ function setup() {
   $("chips").innerHTML = `<span class="hint" style="width:100%">Coordination label of a strict pair</span>` +
     Object.entries(cc).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<button type="button" class="chip" data-c="${esc(c)}" aria-pressed="false">${esc(c)}<span class="c">${n}</span></button>`).join("");
   $("chips").addEventListener("click", e => { const b = e.target.closest(".chip"); if (!b) return; st.coord = st.coord === b.dataset.c ? "" : b.dataset.c; refresh(); });
-  for (const [id, k] of [["f-q", "q"], ["f-status", "status"], ["f-title", "title"], ["f-src", "src"], ["f-review", "review"]])
+  for (const [id, k] of [["f-clause", "clause"], ["f-q", "q"], ["f-status", "status"], ["f-title", "title"], ["f-src", "src"], ["f-review", "review"]])
     $(id).addEventListener("input", e => { st[k] = e.target.value; st.limit = 300; refresh(); });
-  $("clear").addEventListener("click", () => { Object.assign(st, { q: "", status: "flagged", title: "", src: "", review: "", coord: "", limit: 300 });
+  $("clear").addEventListener("click", () => { Object.assign(st, { clause: "", q: "", status: "flagged", title: "", src: "", review: "", coord: "", limit: 300 }); $("f-clause").value = "";
     $("f-q").value = ""; $("f-status").value = "flagged"; $("f-title").value = ""; $("f-src").value = ""; $("f-review").value = ""; refresh(); });
 }
 
@@ -298,11 +334,13 @@ function matches(r) {
   if (st.title && r.title !== st.title) return false;
   if (st.src && r.src !== st.src) return false;
   if (st.coord && !r.pairs.some(p => p.strict && p.coord === st.coord)) return false;
+  if (st.clause === "if" && !ifPairs(r).length) return false;
   if (st.review) { const m = (reviews[r.id] || {}).mark || "none"; if (m !== st.review) return false; }
   if (st.q) { const q = st.q.toLowerCase(); if (!(r.ident.toLowerCase().includes(q) || citation(r.ident).toLowerCase().includes(q) || r.toks.join(" ").toLowerCase().includes(q))) return false; }
   return true;
 }
 function keyPair(r) {
+  if (st.clause === "if") { const q = ifPairs(r); if (q.length) return q[0]; }
   const i = r.pairs.findIndex(p => p.strict); if (i >= 0) return i;
   const j = r.pairs.findIndex(p => p.rel); if (j >= 0) return j;
   const k = r.pairs.findIndex(p => p.not < p.and); return k >= 0 ? k : 0;
@@ -348,6 +386,7 @@ function renderDetail() {
   const lii = liiUrl(r.ident);
   // sentence with highlights for the selected pair
   const vp = nodes && (p.strict ? nodes.negVP : (p.rel ? nodes.relaxedVP : null));
+  const ifc = p ? ifClauseOf(r, p) : null;
   const inVP = i => vp && i >= vp.lo && i <= vp.hi, inCo = i => nodes && i >= nodes.coord.lo && i <= nodes.coord.hi;
   const textHtml = r.toks.map((w, i) => {
     const cls = [];
@@ -355,7 +394,9 @@ function renderDetail() {
     if (inCo(i)) cls.push("t-coord");
     if (p && i === p.not) cls.push("t-not");
     if (p && i === p.and) cls.push("t-and");
-    const tok = cls.length ? `<span class="${cls.join(" ")}">${esc(word(w))}</span>` : esc(word(w));
+    let tok = cls.length ? `<span class="${cls.join(" ")}">${esc(word(w))}</span>` : esc(word(w));
+    if (ifc && i === ifc.lo) tok = `<span class="t-if">⟦</span>` + tok;
+    if (ifc && i === ifc.hi) tok = tok + `<span class="t-if">⟧</span>`;
     if (i === r.toks.length - 1) return tok;
     // the space after a token joins the shading when both neighbours share it
     const sc = [inVP(i) && inVP(i + 1) ? "t-vp" : "", inCo(i) && inCo(i + 1) ? "t-coord" : ""].filter(Boolean);
@@ -370,7 +411,8 @@ function renderDetail() {
       <td class="mono">${esc(q.notParent)}${q.notRelaxedParent !== q.notParent ? ` → ${esc(q.notRelaxedParent)}` : ""}</td>
       <td class="mono">${esc(q.coord)}</td><td>${q.conj}</td><td>${q.dist}</td>
       <td>${q.strict ? `<span class="yes">yes</span>` : `<span class="no">no</span>`}</td>
-      <td>${q.rel ? `<span class="yes">yes</span>` : `<span class="no">no</span>`}</td></tr>`;
+      <td>${q.rel ? `<span class="yes">yes</span>` : `<span class="no">no</span>`}</td>
+      <td>${ifClauseOf(r, q) ? `<span class="yes" style="color:var(--accent)">yes</span>` : `<span class="no">no</span>`}</td></tr>`;
   }).join("");
   const rv = reviews[r.id] || {};
   $("detail").querySelector(".inner").innerHTML = `
@@ -378,11 +420,11 @@ function renderDetail() {
     <div class="meta"><span>${esc(r.src.replace("_", " "))}</span><span>${r.toks.length} tokens</span>
       <span>${r.pairs.length} (not, and) pair${r.pairs.length === 1 ? "" : "s"}, ${strictN} strict</span>
       <span>${esc(r.id)}</span>${lii ? `<a href="${lii}" target="_blank" rel="noopener">Open on LII ↗</a>` : ""}</div>
-    <div class="legend"><span class="l-neg">not</span><span class="l-vp">VP headed by not (pair satisfies C2)</span><span class="l-conj">and</span><span class="l-coord">coordination node</span></div>
+    <div class="legend"><span class="l-neg">not</span><span class="l-vp">VP headed by not (pair satisfies C2)</span><span class="l-conj">and</span><span class="l-coord">coordination node</span><span class="l-if">if-clause containing the pair</span></div>
     <div class="text">${textHtml}</div>
     <div><h3>(not, and) pairs · click one to draw it</h3><div class="tablewrap"><table>
-      <thead><tr><th>pair in context</th><th>not's parent</th><th>coordination</th><th>conjuncts</th><th>distance</th><th>C2 strict</th><th>C2 relaxed</th></tr></thead>
-      <tbody>${pairRows || `<tr><td colspan="7" class="no">No CC "and" in this parse.</td></tr>`}</tbody></table></div></div>
+      <thead><tr><th>pair in context</th><th>not's parent</th><th>coordination</th><th>conjuncts</th><th>distance</th><th>C2 strict</th><th>C2 relaxed</th><th>in if-clause</th></tr></thead>
+      <tbody>${pairRows || `<tr><td colspan="8" class="no">No CC "and" in this parse.</td></tr>`}</tbody></table></div></div>
     <div>
       <div class="treebar"><h3>Tree</h3>
         <span class="seg"><button type="button" data-v="focus" aria-pressed="${st.view === "focus"}">Pair view</button><button type="button" data-v="outline" aria-pressed="${st.view === "outline"}">Full outline</button></span>
@@ -426,9 +468,11 @@ function exportCsv() {
 let measureCtx;
 function tw(s, font = "12px 'IBM Plex Mono', monospace") { measureCtx = measureCtx || document.createElement("canvas").getContext("2d"); measureCtx.font = font; return measureCtx.measureText(s).width; }
 function drawFocus(r, p, nodes) {
-  const top = nodes.top; const nLeaves = top.hi - top.lo + 1;
+  const ifc = ifClauseOf(r, p);
+  const top = ifc || nodes.top; const nLeaves = top.hi - top.lo + 1;
   const open = new Set(st.open);
   for (const n of [...ancestors(nodes.notN), ...ancestors(nodes.cc)]) open.add(n);
+  if (ifc) for (const n of ancestors(nodes.pts[ifc.lo])) open.add(n);
   const showAll = st.expandAll && nLeaves <= 600;
   const isOpen = n => showAll || open.has(n);
   $("t-hint").textContent = `${top.label} spanning ${nLeaves} tokens · click a triangle to unfold it` + (st.expandAll && !showAll ? " · too large to unfold fully" : "");
@@ -452,10 +496,10 @@ function drawFocus(r, p, nodes) {
   function draw(n) {
     const cx = n._x + PAD, cy = n._d * ROW + PAD + 12;
     let cls = "";
-    if (n === nodes.negVP) cls += " negvp"; if (n === nodes.coord) cls += " coord"; if (n === top) cls += " lca";
+    if (n === nodes.negVP) cls += " negvp"; if (n === nodes.coord) cls += " coord"; if (n === top) cls += " lca"; if (n === ifc) cls += " ifc";
     if (n === nodes.notN) cls += " is-not"; if (n === nodes.cc) cls += " is-and";
     if (n._kind === "open") n.kids.forEach(k => { parts.push(`<line x1="${cx}" y1="${cy + 5}" x2="${k._x + PAD}" y2="${k._d * ROW + PAD}"/>`); draw(k); });
-    const lw = tw(n.label) + 8, boxed = n === nodes.negVP || n === nodes.coord;
+    const lw = tw(n.label) + 8, boxed = n === nodes.negVP || n === nodes.coord || n === ifc;
     parts.push(`<g class="${cls.trim()}">${boxed ? `<rect x="${cx - lw / 2}" y="${cy - 12}" width="${lw}" height="17" rx="3"/>` : ""}<text class="lbl" x="${cx}" y="${cy}" text-anchor="middle">${esc(n.label)}</text>`);
     if (n._kind === "pt") parts.push(`<line x1="${cx}" y1="${cy + 5}" x2="${cx}" y2="${leafY - 12}"/><text x="${cx}" y="${leafY}" text-anchor="middle">${esc(word(n.word))}</text>`);
     if (n._kind === "roof") parts.push(`<polygon class="roof" data-key="${n.lo}-${n.hi}-${n.label}" points="${cx},${cy + 6} ${cx - n._w / 2 + 6},${leafY - 13} ${cx + n._w / 2 - 6},${leafY - 13}"><title>Unfold ${esc(n.label)}</title></polygon><text class="yield" x="${cx}" y="${leafY}" text-anchor="middle">${esc(n._y)}</text>`);
