@@ -231,3 +231,11 @@ Also a mis-coordination: 29/214(d).
 - Pulsifer: flagged True / relaxed True (same as pilot).
 - Flagged sentences with a strict pair inside an if-clause: 972.
 - Dashboard: `results_full_partial/dashboard.html` (flagged only, 41.8 MB).
+- 2026-10-20: Modal app no longer running (0 containers; app not listed as deployed). Spending stopped.
+
+## Publication (2026-10-20)
+- Repo pushed to <https://github.com/bwaldon/negconj> (public; required for GitHub Pages on this account).
+  Before pushing, the history was scanned for the `.env` token values and token-like strings: none.
+  `.env`, `data/` and `results*/` were never committed.
+- Dashboard published at <https://bwaldon.github.io/negconj/> from an orphan `gh-pages` branch
+  (single `index.html`, 41.8 MB): flagged sentences from the 69 finished shards.
