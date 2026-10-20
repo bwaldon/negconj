@@ -311,6 +311,7 @@ function setup() {
   const nStrict = ROWS.filter(r => r.flagged).length, nRel = ROWS.filter(r => r.relaxed && !r.flagged).length;
   const stats = [[DATA.n_total, "matched sentences"], [nStrict, "flagged (strict)"], [nRel, "relaxed only"]];
   if (DATA.only_flagged) stats.push(["", "file holds flagged sentences only"]);
+  if (m.partial) stats.push(["", "partial run: " + m.partial.split(";")[0]]);
   $("stats").innerHTML = stats.map(([n, l]) => `<span class="stat"><span class="n">${n === "" ? "" : n.toLocaleString()}</span><span class="l">${l}</span></span>`).join("");
   const titles = [...new Set(ROWS.map(r => r.title))].sort((a, b) => { const x = natKey(a), y = natKey(b); return x[0] - y[0] || (x[1] < y[1] ? -1 : 1); });
   $("f-title").insertAdjacentHTML("beforeend", titles.map(t => `<option value="${esc(t)}">Title ${esc(t.replace(/^0+/, ""))}</option>`).join(""));

@@ -38,6 +38,7 @@ def build(results: Path, only_flagged: bool) -> Path:
     if mp.exists():
         m = json.loads(mp.read_text())
         manifest = {k: m.get(k) for k in ("release_point", "git_commit", "model_package", "gpu_type")}
+        manifest["partial"] = m.get("PARTIAL")
     data = {"run": results.resolve().name, "manifest": manifest, "only_flagged": only_flagged,
             "n_total": int(len(pd.read_parquet(results / "sentences_classified.parquet", columns=["sent_id"]))),
             "rows": rows}
