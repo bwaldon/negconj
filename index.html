@@ -197,7 +197,7 @@ kbd { font: 11px var(--font-mono); border: 1px solid var(--rule); border-bottom-
       <label for="f-ds">Connective<select id="f-ds"></select></label>
       <label for="f-q">Search text or citation<input id="f-q" type="search" placeholder="e.g. shall not apply, 3553"></label>
       <label for="f-status">Status<select id="f-status">
-        <option value="flagged">Flagged (C2)</option>
+        <option value="flagged">Flagged</option>
         <option value="unflagged">Not flagged</option>
         <option value="all">All matches</option>
       </select></label>
@@ -438,7 +438,7 @@ function renderDetail() {
   const r = findRow(st.sel); if (!r) return;
   const W = CONN[r.ds].word, other = r.ds === "and" ? "or" : "and", twin = findRow(other + "|" + r.id);
   const p = r.pairs[st.pair]; const nodes = p ? pairNodes(r, p) : null;
-  const pill = `<span class="pill none">not … ${W}</span>` + (r.flagged ? `<span class="pill flag">Flagged · C2</span>` : `<span class="pill none">Not flagged</span>`);
+  const pill = `<span class="pill none">not … ${W}</span>` + (r.flagged ? `<span class="pill flag">Flagged</span>` : `<span class="pill none">Not flagged</span>`);
   const lii = liiUrl(r.ident);
   // sentence with highlights for the selected pair
   const vp = nodes && p.strict ? nodes.negVP : null;
@@ -473,13 +473,13 @@ function renderDetail() {
   $("detail").querySelector(".inner").innerHTML = `
     <div class="dhead"><h2>${esc(citation(r.ident))}</h2>${pill}</div>
     <div class="meta"><span>${esc(r.src.replace("_", " "))}</span><span>${r.toks.length} tokens</span>
-      <span>${r.pairs.length} (not, ${W}) pair${r.pairs.length === 1 ? "" : "s"}, ${strictN} satisfying C2</span>
+      <span>${r.pairs.length} (not, ${W}) pair${r.pairs.length === 1 ? "" : "s"}, ${strictN} flagged</span>
       <span>${esc(r.id)}</span>${lii ? `<a href="${lii}" target="_blank" rel="noopener">Open on LII ↗</a>` : ""}</div>
     ${twin ? `<div class="also">This sentence is also in the not … ${other} set (${twin.flagged ? "flagged" : "not flagged"}). <button type="button" id="twin">Open it</button></div>` : ""}
-    <div class="legend"><span class="l-neg">not</span><span class="l-vp">VP headed by not (pair satisfies C2)</span><span class="l-conj">${W}</span><span class="l-coord">coordination node</span><span class="l-if">if-clause containing the pair</span></div>
+    <div class="legend"><span class="l-neg">not</span><span class="l-vp">VP headed by not (flagged pair)</span><span class="l-conj">${W}</span><span class="l-coord">coordination node</span><span class="l-if">if-clause containing the pair</span></div>
     <div class="text">${textHtml}</div>
     <div><h3>(not, ${W}) pairs · click one to draw it</h3><div class="tablewrap"><table>
-      <thead><tr><th>pair in context</th><th>not's parent</th><th>coordination</th><th>conjuncts</th><th>distance</th><th>C2</th><th>in if-clause</th></tr></thead>
+      <thead><tr><th>pair in context</th><th>not's parent</th><th>coordination</th><th>conjuncts</th><th>distance</th><th>flagged</th><th>in if-clause</th></tr></thead>
       <tbody>${pairRows || `<tr><td colspan="7" class="no">No CC "${W}" in this parse.</td></tr>`}</tbody></table></div></div>
     <div>
       <div class="treebar"><h3>Tree</h3>
