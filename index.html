@@ -101,7 +101,6 @@ aside { border-right: 1px solid var(--rule); display: flex; flex-direction: colu
 .dhead h2 { margin: 0; font: 600 22px/1.2 var(--font-text); text-wrap: balance; }
 .pill { font: 500 11px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; }
 .pill.flag { color: var(--neg); background: var(--neg-soft); }
-.pill.relax { color: var(--warn); background: var(--warn-soft); }
 .pill.none { color: var(--muted); }
 .meta { color: var(--muted); font: 12px var(--font-mono); display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .meta a { color: var(--accent); }
@@ -198,15 +197,13 @@ kbd { font: 11px var(--font-mono); border: 1px solid var(--rule); border-bottom-
       <label for="f-ds">Connective<select id="f-ds"></select></label>
       <label for="f-q">Search text or citation<input id="f-q" type="search" placeholder="e.g. shall not apply, 3553"></label>
       <label for="f-status">Status<select id="f-status">
-        <option value="flagged">Flagged (C2 strict)</option>
-        <option value="relaxed">Relaxed only</option>
-        <option value="any">Strict or relaxed</option>
+        <option value="flagged">Flagged (C2)</option>
         <option value="unflagged">Not flagged</option>
         <option value="all">All matches</option>
       </select></label>
       <label for="f-title">Title<select id="f-title"><option value="">All titles</option></select></label>
       <label class="wide" for="f-clause">Where the pair sits<select id="f-clause">
-        <option value="if">Inside an if-clause (not and the coordination both in it)</option>
+        <option value="if">Inside an 'if'-clause ('not' and the coordination both in it)</option>
         <option value="">Anywhere in the sentence</option>
       </select></label>
       <label for="f-src">Unit type<select id="f-src"><option value="">All</option></select></label>
@@ -214,7 +211,7 @@ kbd { font: 11px var(--font-mono); border: 1px solid var(--rule); border-bottom-
         <option value="">Any</option><option value="none">Not reviewed</option>
         <option value="yes">Yes (negated connective)</option><option value="no">No</option><option value="unsure">Unsure</option>
       </select></label>
-      <div class="chips" id="chips" aria-label="Coordination label of a strict pair"></div>
+      <div class="chips" id="chips" aria-label="Coordination label"></div>
     </div>
     <div class="count"><span id="count"></span><button id="clear" type="button">Clear filters</button></div>
     <div id="list" role="listbox" aria-label="Sentences"><p class="loading">Loading sentences…</p></div>
@@ -315,7 +312,6 @@ function ifClauseOf(row, pair) {
 }
 function pairCounts(p) {
   if (st.status === "flagged") return p.strict;
-  if (st.status === "relaxed" || st.status === "any") return p.strict || p.rel;
   return true;
 }
 function ifPairs(row) {
@@ -372,22 +368,20 @@ function inDs(r) { return !st.ds || r.ds === st.ds; }
 function drawHeader() {
   const ms = DATASETS.map(c => META[c]).filter(d => d && (!st.ds || d.conn === st.ds));
   const rows = ROWS.filter(inDs);
-  const nStrict = rows.filter(r => r.flagged).length, nRel = rows.filter(r => r.relaxed && !r.flagged).length;
-  const stats = [[ms.reduce((a, d) => a + d.n_total, 0), "matched sentences"], [nStrict, "flagged (strict)"], [nRel, "relaxed only"]];
+  const nFlagged = rows.filter(r => r.flagged).length;
+  const stats = [[ms.reduce((a, d) => a + d.n_total, 0), "matched sentences"], [nFlagged, "flagged"]];
   if (ms.some(d => d.only_flagged)) stats.push(["", "files hold flagged sentences only"]);
   ms.forEach(d => { const p = d.manifest && d.manifest.partial; if (p) stats.push(["", `${d.conn}: partial run: ${p.split(";")[0]}`]); });
   $("stats").innerHTML = stats.map(([n, l]) => `<span class="stat"><span class="n">${n === "" ? "" : n.toLocaleString()}</span><span class="l">${l}</span></span>`).join("");
   const cc = {}; rows.forEach(r => new Set(r.pairs.filter(p => p.strict).map(p => p.coord)).forEach(c => cc[c] = (cc[c] || 0) + 1));
-  $("chips").innerHTML = `<span class="hint" style="width:100%">Coordination label of a strict pair</span>` +
+  $("chips").innerHTML = `<span class="hint" style="width:100%">Coordination label</span>` +
     Object.entries(cc).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<button type="button" class="chip" data-c="${esc(c)}" aria-pressed="false">${esc(c)}<span class="c">${n}</span></button>`).join("");
 }
 
 function matches(r) {
   if (!inDs(r)) return false;
   if (st.status === "flagged" && !r.flagged) return false;
-  if (st.status === "relaxed" && !(r.relaxed && !r.flagged)) return false;
-  if (st.status === "any" && !(r.flagged || r.relaxed)) return false;
-  if (st.status === "unflagged" && (r.flagged || r.relaxed)) return false;
+  if (st.status === "unflagged" && r.flagged) return false;
   if (st.title && r.title !== st.title) return false;
   if (st.src && r.src !== st.src) return false;
   if (st.coord && !r.pairs.some(p => p.strict && p.coord === st.coord)) return false;
@@ -399,7 +393,6 @@ function matches(r) {
 function keyPair(r) {
   if (st.clause === "if") { const q = ifPairs(r); if (q.length) return q[0]; }
   const i = r.pairs.findIndex(p => p.strict); if (i >= 0) return i;
-  const j = r.pairs.findIndex(p => p.rel); if (j >= 0) return j;
   const k = r.pairs.findIndex(p => p.not < p.and); return k >= 0 ? k : 0;
 }
 function snippetFull(r) {
@@ -445,10 +438,10 @@ function renderDetail() {
   const r = findRow(st.sel); if (!r) return;
   const W = CONN[r.ds].word, other = r.ds === "and" ? "or" : "and", twin = findRow(other + "|" + r.id);
   const p = r.pairs[st.pair]; const nodes = p ? pairNodes(r, p) : null;
-  const pill = `<span class="pill none">not … ${W}</span>` + (r.flagged ? `<span class="pill flag">Flagged · C2 strict</span>` : r.relaxed ? `<span class="pill relax">Relaxed only</span>` : `<span class="pill none">Not flagged</span>`);
+  const pill = `<span class="pill none">not … ${W}</span>` + (r.flagged ? `<span class="pill flag">Flagged · C2</span>` : `<span class="pill none">Not flagged</span>`);
   const lii = liiUrl(r.ident);
   // sentence with highlights for the selected pair
-  const vp = nodes && (p.strict ? nodes.negVP : (p.rel ? nodes.relaxedVP : null));
+  const vp = nodes && p.strict ? nodes.negVP : null;
   const ifc = p ? ifClauseOf(r, p) : null;
   const inVP = i => vp && i >= vp.lo && i <= vp.hi, inCo = i => nodes && i >= nodes.coord.lo && i <= nodes.coord.hi;
   const textHtml = r.toks.map((w, i) => {
@@ -471,24 +464,23 @@ function renderDetail() {
     const show = (s, e, hi, col) => r.toks.slice(s, e).map((w, k) => s + k === hi ? `<span style="color:var(--${col});font-weight:600">${esc(word(w))}</span>` : esc(word(w))).join(" ");
     return `<tr data-i="${i}" aria-selected="${i === st.pair}">
       <td class="ctx">${show(a, b, q.not, "neg")} <span style="color:var(--muted)">…</span> ${show(c, d, q.and, "conj")}</td>
-      <td class="mono">${esc(q.notParent)}${q.notRelaxedParent !== q.notParent ? ` → ${esc(q.notRelaxedParent)}` : ""}</td>
+      <td class="mono">${esc(q.notParent)}</td>
       <td class="mono">${esc(q.coord)}</td><td>${q.conj}</td><td>${q.dist}</td>
       <td>${q.strict ? `<span class="yes">yes</span>` : `<span class="no">no</span>`}</td>
-      <td>${q.rel ? `<span class="yes">yes</span>` : `<span class="no">no</span>`}</td>
       <td>${q.inIf ? `<span class="yes" style="color:var(--accent)">yes</span>` : `<span class="no">no</span>`}</td></tr>`;
   }).join("");
   const rv = reviews[r.key] || {};
   $("detail").querySelector(".inner").innerHTML = `
     <div class="dhead"><h2>${esc(citation(r.ident))}</h2>${pill}</div>
     <div class="meta"><span>${esc(r.src.replace("_", " "))}</span><span>${r.toks.length} tokens</span>
-      <span>${r.pairs.length} (not, ${W}) pair${r.pairs.length === 1 ? "" : "s"}, ${strictN} strict</span>
+      <span>${r.pairs.length} (not, ${W}) pair${r.pairs.length === 1 ? "" : "s"}, ${strictN} satisfying C2</span>
       <span>${esc(r.id)}</span>${lii ? `<a href="${lii}" target="_blank" rel="noopener">Open on LII ↗</a>` : ""}</div>
-    ${twin ? `<div class="also">This sentence is also in the not … ${other} set (${twin.flagged ? "flagged" : twin.relaxed ? "relaxed only" : "not flagged"}). <button type="button" id="twin">Open it</button></div>` : ""}
+    ${twin ? `<div class="also">This sentence is also in the not … ${other} set (${twin.flagged ? "flagged" : "not flagged"}). <button type="button" id="twin">Open it</button></div>` : ""}
     <div class="legend"><span class="l-neg">not</span><span class="l-vp">VP headed by not (pair satisfies C2)</span><span class="l-conj">${W}</span><span class="l-coord">coordination node</span><span class="l-if">if-clause containing the pair</span></div>
     <div class="text">${textHtml}</div>
     <div><h3>(not, ${W}) pairs · click one to draw it</h3><div class="tablewrap"><table>
-      <thead><tr><th>pair in context</th><th>not's parent</th><th>coordination</th><th>conjuncts</th><th>distance</th><th>C2 strict</th><th>C2 relaxed</th><th>in if-clause</th></tr></thead>
-      <tbody>${pairRows || `<tr><td colspan="8" class="no">No CC "${W}" in this parse.</td></tr>`}</tbody></table></div></div>
+      <thead><tr><th>pair in context</th><th>not's parent</th><th>coordination</th><th>conjuncts</th><th>distance</th><th>C2</th><th>in if-clause</th></tr></thead>
+      <tbody>${pairRows || `<tr><td colspan="7" class="no">No CC "${W}" in this parse.</td></tr>`}</tbody></table></div></div>
     <div>
       <div class="treebar"><h3>Tree</h3>
         <span class="seg"><button type="button" data-v="focus" aria-pressed="${st.view === "focus"}">Pair view</button><button type="button" data-v="outline" aria-pressed="${st.view === "outline"}">Full outline</button></span>
@@ -523,8 +515,8 @@ function setMark(m) {
 }
 function exportCsv() {
   const q = s => `"${String(s ?? "").replace(/"/g, '""')}"`;
-  const lines = [["connective", "sent_id", "citation", "identifier", "flagged", "flagged_relaxed", "review", "notes"].join(",")];
-  ROWS.forEach(r => { const v = reviews[r.key]; if (v && (v.mark || v.note)) lines.push([r.ds, q(r.id), q(citation(r.ident)), q(r.ident), r.flagged, r.relaxed, q(v.mark || ""), q(v.note || "")].join(",")); });
+  const lines = [["connective", "sent_id", "citation", "identifier", "flagged", "review", "notes"].join(",")];
+  ROWS.forEach(r => { const v = reviews[r.key]; if (v && (v.mark || v.note)) lines.push([r.ds, q(r.id), q(citation(r.ident)), q(r.ident), r.flagged, q(v.mark || ""), q(v.note || "")].join(",")); });
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
   a.download = `negated_connective_reviews.csv`; document.body.appendChild(a); a.click(); a.remove();
 }
