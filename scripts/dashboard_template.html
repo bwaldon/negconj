@@ -231,9 +231,9 @@ let ROWS = [];
 const NEG = {
   index(conn, d) {
     META[conn] = d;
-    for (const r of d.rows) ROWS.push({ ds: conn, key: conn + "|" + r[0], id: r[0], title: r[1], ident: r[2] || "", src: r[3],
+    d.rows.forEach((r, n) => ROWS.push({ ds: conn, n, key: conn + "|" + r[0], id: r[0], title: r[1], ident: r[2] || "", src: r[3],
       toks: r[4].split(" "), tree: null, flagged: r[5], relaxed: r[6], pairs: r[7].map(p => ({ not: p[0], and: p[1], notParent: p[2],
-      notRelaxedParent: p[3], coord: p[4], conj: p[5], dist: p[6], strict: p[7], rel: p[8], inIf: p[9] })) });
+      notRelaxedParent: p[3], coord: p[4], conj: p[5], dist: p[6], strict: p[7], rel: p[8], inIf: p[9] })) }));
   },
   trees(conn, title, map) { TREES[conn + "|" + title] = map; },
 };
@@ -344,6 +344,11 @@ const findRow = k => byKey.get(k);
 /* ---------- header + filters ---------- */
 function natKey(t) { const m = /^(\d+)(.*)$/.exec(t); return m ? [+m[1], m[2]] : [1e9, t]; }
 function setup() {
+  // Both datasets interleaved by title, then citation, so a provision's and- and or-hits sit together;
+  // within a dataset, document order.
+  const cmpIdent = (a, b) => a.localeCompare(b, undefined, { numeric: true });
+  ROWS.sort((a, b) => { const x = natKey(a.title), y = natKey(b.title);
+    return x[0] - y[0] || (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0) || cmpIdent(a.ident, b.ident) || (a.ds < b.ds ? -1 : a.ds > b.ds ? 1 : a.n - b.n); });
   ROWS.forEach(r => byKey.set(r.key, r));
   const ms = DATASETS.map(c => META[c]).filter(Boolean);
   const m0 = (ms[0] || {}).manifest || {};

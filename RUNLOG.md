@@ -283,3 +283,33 @@ Also a mis-coordination: 29/214(d).
 - Pulsifer: flagged True / relaxed True (unchanged). The 41,559 sentences in the partial results are
   all present, with identical flags.
 - Modal metered this month after the finish: $17.67 (credits cover it).
+
+### Disjunction run (orchestrator call fc-01M5FTZMXGD8HAX5VVQ1788426, code commit d851771 via deployed app; launch commit c250d5d)
+- Extraction (separate call, stop_after=extract): 266,232 units (identical count), prefilter
+  **58,552,423 chars**. Plan: **69 shards**, 24,094 sections (target 2 M chars).
+- Waited ~25 min for L4 capacity before the first shards started. Reported GPU **9,191 s** in total
+  (conjunction run: 31,635 s); budget stop at 30,000 s not reached.
+- Merge: 139,855 sentences (149,097 raw splits, 9,242 re-merged); **49,546 matches, 49,541 parsed,
+  5 too long** (the same four as the conjunction run plus 42 U.S.C. 654, 4,711 tokens).
+  **25,098 trees reused** from `results/parses.parquet` (SHA-256 prefix e046e50c4195, in the
+  manifest); every sentence present in both runs was reused, with identical tokens and tree.
+  0 duplicate rows. 406,889 (not, or) pairs; **flagged 28,623, relaxed 28,658** (57.8% of parsed
+  matches, vs 29.8% for *and*). Report checks all OK; 122 checksums verified → `results_disj/`.
+- **Campos-Chaves** (8 U.S.C. § 1229a(b)(5)(C), condensed chapeau, 119 tokens): flagged True /
+  relaxed True. 4 (not, or) pairs; the one strict pair is "did **not** receive notice in accordance
+  with paragraph (1) **or** (2)" (coordination NP under the negated VP). The clause-level *or*s
+  ("…, or upon a motion…", "or the alien demonstrates…") and "Federal or State" are not flagged.
+- Strict-pair coordination labels (sentences): NP 19,534, VP 8,865, NML 5,108, PP 4,303,
+  ADJP 3,044, UCP 1,190.
+- Modal metered this month after both runs: $20.93 (credits cover it).
+
+### Dashboard (both runs)
+- `scripts/build_dashboard.py --and results --or results_disj --out site`: a static site instead of one
+  self-contained HTML file. `data/{and,or}/index.js` (sentences, flags, pairs; 16.7 MB and 32.7 MB) load
+  at start, so search and filters cover both runs; `data/{conn}/trees-{title}.js` (74 MB in total) load
+  when a sentence is opened. Flagged (strict or relaxed) sentences only, as before.
+- The if-clause test moved from the page to Python (`in_if_flags`, same rule). On the partial run it
+  reproduces the earlier dashboard's count exactly (972). Full runs: 1,048 (*and*), 2,643 (*or*).
+- Connective selector (both / and / or); rows interleaved by citation; a sentence in both sets links
+  to its twin. Reviews are keyed `{conn}|{sent_id}`; marks saved by the earlier viewer
+  (localStorage `negconj-review:results_full_partial`) are carried over as *and* reviews.
