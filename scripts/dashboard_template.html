@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Negconj Tree Viewer</title>
+<title>Negated Connectives Viewer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
 <style>
@@ -88,6 +88,10 @@ aside { border-right: 1px solid var(--rule); display: flex; flex-direction: colu
 .row .cite .rv { margin-left: auto; font-size: 11px; }
 .row .snip { font: 14px/1.4 var(--font-text); color: var(--ink); overflow-wrap: anywhere; }
 .row .snip .gap { color: var(--muted); }
+.row .conn { font: 600 11px var(--font-mono); color: var(--conj); border: 1px solid var(--conj); border-radius: 3px; padding: 0 4px; }
+.loading { color: var(--muted); padding: 20px 16px; }
+.also { font-size: 12px; color: var(--muted); }
+.also button { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 12px; text-decoration: underline; }
 .more { margin: 10px 16px; padding: 6px; width: calc(100% - 32px); border: 1px dashed var(--rule); background: none; border-radius: 4px; cursor: pointer; color: var(--accent); }
 
 /* ---------- detail ---------- */
@@ -184,14 +188,15 @@ kbd { font: 11px var(--font-mono); border: 1px solid var(--rule); border-bottom-
 </head>
 <body>
 <header class="top">
-  <h1>Negconj Tree Viewer · <em>not</em> … <b>and</b></h1>
+  <h1>Negated Connectives · <em>not</em> … <b>and</b> / <b>or</b></h1>
   <span class="runmeta" id="runmeta"></span>
   <div class="stats" id="stats"></div>
 </header>
 <main>
   <aside>
     <div class="filters">
-      <label class="wide" for="f-q">Search text or citation<input id="f-q" type="search" placeholder="e.g. shall not apply, 3553"></label>
+      <label for="f-ds">Connective<select id="f-ds"></select></label>
+      <label for="f-q">Search text or citation<input id="f-q" type="search" placeholder="e.g. shall not apply, 3553"></label>
       <label for="f-status">Status<select id="f-status">
         <option value="flagged">Flagged (C2 strict)</option>
         <option value="relaxed">Relaxed only</option>
@@ -207,20 +212,43 @@ kbd { font: 11px var(--font-mono); border: 1px solid var(--rule); border-bottom-
       <label for="f-src">Unit type<select id="f-src"><option value="">All</option></select></label>
       <label for="f-review">My review<select id="f-review">
         <option value="">Any</option><option value="none">Not reviewed</option>
-        <option value="yes">Negconj</option><option value="no">Not negconj</option><option value="unsure">Unsure</option>
+        <option value="yes">Yes (negated connective)</option><option value="no">No</option><option value="unsure">Unsure</option>
       </select></label>
       <div class="chips" id="chips" aria-label="Coordination label of a strict pair"></div>
     </div>
     <div class="count"><span id="count"></span><button id="clear" type="button">Clear filters</button></div>
-    <div id="list" role="listbox" aria-label="Sentences"></div>
+    <div id="list" role="listbox" aria-label="Sentences"><p class="loading">Loading sentences…</p></div>
   </aside>
   <section id="detail" aria-live="polite"><div class="inner"><p class="empty">Select a sentence.</p></div></section>
 </main>
 <script>
-const DATA = /*__DATA__*/null;
-const ROWS = DATA.rows.map(r => ({ id: r[0], title: r[1], ident: r[2] || "", src: r[3], toks: r[4], tree: r[5],
-  flagged: r[6], relaxed: r[7], pairs: r[8].map(p => ({ not: p[0], and: p[1], notParent: p[2], notRelaxedParent: p[3],
-  coord: p[4], conj: p[5], dist: p[6], strict: p[7], rel: p[8] })) }));
+/* Data: per connective, data/{conn}/index.js (sentences, flags, pairs) loaded at start, and
+   data/{conn}/trees-{title}.js loaded when a sentence of that title is opened. Plain script
+   files, so this page also works when opened from disk. */
+const DATASETS = /*__DATASETS__*/[];
+const META = {}, TREES = {}, PENDING = {};
+let ROWS = [];
+const NEG = {
+  index(conn, d) {
+    META[conn] = d;
+    for (const r of d.rows) ROWS.push({ ds: conn, key: conn + "|" + r[0], id: r[0], title: r[1], ident: r[2] || "", src: r[3],
+      toks: r[4].split(" "), tree: null, flagged: r[5], relaxed: r[6], pairs: r[7].map(p => ({ not: p[0], and: p[1], notParent: p[2],
+      notRelaxedParent: p[3], coord: p[4], conj: p[5], dist: p[6], strict: p[7], rel: p[8], inIf: p[9] })) });
+  },
+  trees(conn, title, map) { TREES[conn + "|" + title] = map; },
+};
+function loadScript(src) {
+  if (PENDING[src]) return PENDING[src];
+  return PENDING[src] = new Promise((ok, fail) => { const s = document.createElement("script"); s.src = src; s.onload = ok;
+    s.onerror = () => { delete PENDING[src]; fail(new Error("could not load " + src)); }; document.head.appendChild(s); });
+}
+async function ensureTree(r) {
+  if (r.tree) return;
+  const k = r.ds + "|" + r.title;
+  if (!TREES[k]) await loadScript(`data/${r.ds}/trees-${r.title}.js`);
+  r.tree = TREES[k][r.id];
+}
+const CONN = { and: { word: "and", label: "Negative conjunction", short: "negconj" }, or: { word: "or", label: "Negative disjunction", short: "negdisj" } };
 const BRK = { "-LRB-": "(", "-RRB-": ")", "-LSB-": "[", "-RSB-": "]", "-LCB-": "{", "-RCB-": "}" };
 const word = w => BRK[w] || w;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -277,6 +305,7 @@ function isIfClause(n) {
   return a === "if" || ((a === "only" || a === "even") && b === "if");
 }
 function ifClauseOf(row, pair) {
+  if (!pair.inIf || !row.tree) return null;
   const nd = pairNodes(row, pair);
   for (let a = nd.notN.parent; a; a = a.parent) {
     a._tree = row.tree;
@@ -289,45 +318,67 @@ function pairCounts(p) {
   if (st.status === "relaxed" || st.status === "any") return p.strict || p.rel;
   return true;
 }
-const ifCache = new Map();
 function ifPairs(row) {
-  if (!ifCache.has(row.id)) ifCache.set(row.id, row.pairs.map((p, i) => ifClauseOf(row, p) ? i : -1).filter(i => i >= 0));
-  return ifCache.get(row.id).filter(i => pairCounts(row.pairs[i]));
+  const out = []; row.pairs.forEach((p, i) => { if (p.inIf && pairCounts(p)) out.push(i); }); return out;
 }
 
 /* ---------- state ---------- */
-const KEY = "negconj-review:" + DATA.run;
+// Reviews are keyed "{conn}|{sent_id}". Marks made in the earlier single-dataset viewer (which
+// covered not … and only) are carried over once.
+const KEY = "negconj-review:v2";
 let reviews = {};
-try { reviews = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { reviews = {}; }
+try {
+  reviews = JSON.parse(localStorage.getItem(KEY) || "null");
+  if (!reviews) {
+    reviews = {};
+    for (const old of ["negconj-review:results_full_partial", "negconj-review:results"]) {
+      const o = JSON.parse(localStorage.getItem(old) || "{}"); for (const [id, v] of Object.entries(o)) reviews["and|" + id] = v;
+    }
+  }
+} catch (e) { reviews = {}; }
 function saveReviews() { try { localStorage.setItem(KEY, JSON.stringify(reviews)); } catch (e) { /* storage unavailable */ } }
-const st = { clause: "if", q: "", status: "flagged", title: "", src: "", review: "", coord: "", limit: 300, sel: null, pair: 0, view: "focus", expandAll: false, open: new Set() };
+const st = { ds: "", clause: "if", q: "", status: "flagged", title: "", src: "", review: "", coord: "", limit: 300, sel: null, pair: 0, view: "focus", expandAll: false, open: new Set() };
+const byKey = new Map();
+const findRow = k => byKey.get(k);
 
 /* ---------- header + filters ---------- */
 function natKey(t) { const m = /^(\d+)(.*)$/.exec(t); return m ? [+m[1], m[2]] : [1e9, t]; }
 function setup() {
-  const m = DATA.manifest || {};
-  $("runmeta").textContent = [DATA.run, m.release_point && "release " + m.release_point,
-    m.git_commit && "commit " + String(m.git_commit).slice(0, 8)].filter(Boolean).join(" · ");
-  const nStrict = ROWS.filter(r => r.flagged).length, nRel = ROWS.filter(r => r.relaxed && !r.flagged).length;
-  const stats = [[DATA.n_total, "matched sentences"], [nStrict, "flagged (strict)"], [nRel, "relaxed only"]];
-  if (DATA.only_flagged) stats.push(["", "file holds flagged sentences only"]);
-  if (m.partial) stats.push(["", "partial run: " + m.partial.split(";")[0]]);
-  $("stats").innerHTML = stats.map(([n, l]) => `<span class="stat"><span class="n">${n === "" ? "" : n.toLocaleString()}</span><span class="l">${l}</span></span>`).join("");
+  ROWS.forEach(r => byKey.set(r.key, r));
+  const ms = DATASETS.map(c => META[c]).filter(Boolean);
+  const m0 = (ms[0] || {}).manifest || {};
+  $("runmeta").textContent = [m0.release_point && "release " + m0.release_point,
+    ...ms.map(d => `${d.conn}: ${d.run}${d.manifest && d.manifest.git_commit ? " @" + String(d.manifest.git_commit).slice(0, 8) : ""}`)].filter(Boolean).join(" · ");
+  $("f-ds").innerHTML = (ms.length > 1 ? `<option value="">Both (and, or)</option>` : "") +
+    ms.map(d => `<option value="${d.conn}">not … ${d.conn} · ${esc(d.label.toLowerCase())}</option>`).join("");
+  st.ds = $("f-ds").value;
   const titles = [...new Set(ROWS.map(r => r.title))].sort((a, b) => { const x = natKey(a), y = natKey(b); return x[0] - y[0] || (x[1] < y[1] ? -1 : 1); });
   $("f-title").insertAdjacentHTML("beforeend", titles.map(t => `<option value="${esc(t)}">Title ${esc(t.replace(/^0+/, ""))}</option>`).join(""));
   const srcs = [...new Set(ROWS.map(r => r.src))].sort();
   $("f-src").insertAdjacentHTML("beforeend", srcs.map(s => `<option value="${esc(s)}">${esc(s.replace("_", " "))}</option>`).join(""));
-  const cc = {}; ROWS.forEach(r => new Set(r.pairs.filter(p => p.strict).map(p => p.coord)).forEach(c => cc[c] = (cc[c] || 0) + 1));
-  $("chips").innerHTML = `<span class="hint" style="width:100%">Coordination label of a strict pair</span>` +
-    Object.entries(cc).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<button type="button" class="chip" data-c="${esc(c)}" aria-pressed="false">${esc(c)}<span class="c">${n}</span></button>`).join("");
   $("chips").addEventListener("click", e => { const b = e.target.closest(".chip"); if (!b) return; st.coord = st.coord === b.dataset.c ? "" : b.dataset.c; refresh(); });
-  for (const [id, k] of [["f-clause", "clause"], ["f-q", "q"], ["f-status", "status"], ["f-title", "title"], ["f-src", "src"], ["f-review", "review"]])
-    $(id).addEventListener("input", e => { st[k] = e.target.value; st.limit = 300; refresh(); });
+  for (const [id, k] of [["f-ds", "ds"], ["f-clause", "clause"], ["f-q", "q"], ["f-status", "status"], ["f-title", "title"], ["f-src", "src"], ["f-review", "review"]])
+    $(id).addEventListener("input", e => { st[k] = e.target.value; st.limit = 300; if (k === "ds") { st.coord = ""; drawHeader(); } refresh(); });
   $("clear").addEventListener("click", () => { Object.assign(st, { clause: "", q: "", status: "flagged", title: "", src: "", review: "", coord: "", limit: 300 }); $("f-clause").value = "";
     $("f-q").value = ""; $("f-status").value = "flagged"; $("f-title").value = ""; $("f-src").value = ""; $("f-review").value = ""; refresh(); });
+  drawHeader();
+}
+function inDs(r) { return !st.ds || r.ds === st.ds; }
+function drawHeader() {
+  const ms = DATASETS.map(c => META[c]).filter(d => d && (!st.ds || d.conn === st.ds));
+  const rows = ROWS.filter(inDs);
+  const nStrict = rows.filter(r => r.flagged).length, nRel = rows.filter(r => r.relaxed && !r.flagged).length;
+  const stats = [[ms.reduce((a, d) => a + d.n_total, 0), "matched sentences"], [nStrict, "flagged (strict)"], [nRel, "relaxed only"]];
+  if (ms.some(d => d.only_flagged)) stats.push(["", "files hold flagged sentences only"]);
+  ms.forEach(d => { const p = d.manifest && d.manifest.partial; if (p) stats.push(["", `${d.conn}: partial run: ${p.split(";")[0]}`]); });
+  $("stats").innerHTML = stats.map(([n, l]) => `<span class="stat"><span class="n">${n === "" ? "" : n.toLocaleString()}</span><span class="l">${l}</span></span>`).join("");
+  const cc = {}; rows.forEach(r => new Set(r.pairs.filter(p => p.strict).map(p => p.coord)).forEach(c => cc[c] = (cc[c] || 0) + 1));
+  $("chips").innerHTML = `<span class="hint" style="width:100%">Coordination label of a strict pair</span>` +
+    Object.entries(cc).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<button type="button" class="chip" data-c="${esc(c)}" aria-pressed="false">${esc(c)}<span class="c">${n}</span></button>`).join("");
 }
 
 function matches(r) {
+  if (!inDs(r)) return false;
   if (st.status === "flagged" && !r.flagged) return false;
   if (st.status === "relaxed" && !(r.relaxed && !r.flagged)) return false;
   if (st.status === "any" && !(r.flagged || r.relaxed)) return false;
@@ -336,7 +387,7 @@ function matches(r) {
   if (st.src && r.src !== st.src) return false;
   if (st.coord && !r.pairs.some(p => p.strict && p.coord === st.coord)) return false;
   if (st.clause === "if" && !ifPairs(r).length) return false;
-  if (st.review) { const m = (reviews[r.id] || {}).mark || "none"; if (m !== st.review) return false; }
+  if (st.review) { const m = (reviews[r.key] || {}).mark || "none"; if (m !== st.review) return false; }
   if (st.q) { const q = st.q.toLowerCase(); if (!(r.ident.toLowerCase().includes(q) || citation(r.ident).toLowerCase().includes(q) || r.toks.join(" ").toLowerCase().includes(q))) return false; }
   return true;
 }
@@ -353,7 +404,7 @@ function snippetFull(r) {
   const span = (a, b) => { const out = []; for (let i = Math.max(0, a); i < Math.min(r.toks.length, b); i++) { const c = mark(i); out.push(c ? `<span style="color:var(--${c});font-weight:600">${esc(word(r.toks[i]))}</span>` : esc(word(r.toks[i]))); } return out.join(" "); };
   return p.and - p.not <= 12 && p.and > p.not ? span(p.not - 4, p.and + 5) : span(p.not - 4, p.not + 5) + ` <span class="gap">…</span> ` + span(p.and - 4, p.and + 5);
 }
-const REVIEW_LABEL = { yes: "✓ negconj", no: "✗ not negconj", unsure: "? unsure" };
+const REVIEW_LABEL = { yes: "✓ yes", no: "✗ no", unsure: "? unsure" };
 
 let filtered = [];
 function refresh() {
@@ -362,28 +413,34 @@ function refresh() {
   $("count").textContent = `${filtered.length.toLocaleString()} sentence${filtered.length === 1 ? "" : "s"}`;
   const shown = filtered.slice(0, st.limit);
   $("list").innerHTML = shown.map(r => {
-    const rv = (reviews[r.id] || {}).mark;
-    return `<div class="row" role="option" data-id="${esc(r.id)}" aria-selected="${r.id === st.sel}">
-      <div class="cite"><span>${esc(citation(r.ident))}</span><span style="color:var(--muted)">${esc(r.src === "chapeau_condensed" ? "chapeau" : r.src)}</span>${rv ? `<span class="rv">${REVIEW_LABEL[rv]}</span>` : ""}</div>
+    const rv = (reviews[r.key] || {}).mark;
+    return `<div class="row" role="option" data-id="${esc(r.key)}" aria-selected="${r.key === st.sel}">
+      <div class="cite">${st.ds ? "" : `<span class="conn">${r.ds}</span>`}<span>${esc(citation(r.ident))}</span><span style="color:var(--muted)">${esc(r.src === "chapeau_condensed" ? "chapeau" : r.src)}</span>${rv ? `<span class="rv">${REVIEW_LABEL[rv]}</span>` : ""}</div>
       <div class="snip">${snippetFull(r)}</div></div>`;
   }).join("") + (filtered.length > st.limit ? `<button class="more" type="button" id="more">Show ${Math.min(300, filtered.length - st.limit)} more</button>` : "");
   if (!filtered.length) $("list").innerHTML = `<p class="empty" style="padding:20px 16px">No sentences match these filters.</p>`;
   const more = $("more"); if (more) more.addEventListener("click", () => { st.limit += 300; refresh(); });
-  if (!filtered.some(r => r.id === st.sel) && filtered.length) select(filtered[0].id, false);
+  if (!filtered.some(r => r.key === st.sel) && filtered.length) select(filtered[0].key, false);
 }
 $("list").addEventListener("click", e => { const row = e.target.closest(".row"); if (row) select(row.dataset.id, false); });
 
 /* ---------- detail ---------- */
-function select(id, scroll = true) {
-  st.sel = id; const r = ROWS.find(x => x.id === id); st.pair = keyPair(r); st.expandAll = false; st.open = new Set();
+async function select(id, scroll = true) {
+  st.sel = id; const r = findRow(id); st.pair = keyPair(r); st.expandAll = false; st.open = new Set();
   document.querySelectorAll("#list .row").forEach(el => el.setAttribute("aria-selected", String(el.dataset.id === id)));
   if (scroll) { const el = document.querySelector(`#list .row[data-id="${CSS.escape(id)}"]`); if (el) el.scrollIntoView({ block: "nearest" }); }
+  if (!r.tree) {
+    $("detail").querySelector(".inner").innerHTML = `<p class="empty">Loading the tree…</p>`;
+    try { await ensureTree(r); } catch (e) { $("detail").querySelector(".inner").innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+    if (st.sel !== id) return;
+  }
   renderDetail();
 }
 function renderDetail() {
-  const r = ROWS.find(x => x.id === st.sel); if (!r) return;
+  const r = findRow(st.sel); if (!r) return;
+  const W = CONN[r.ds].word, other = r.ds === "and" ? "or" : "and", twin = findRow(other + "|" + r.id);
   const p = r.pairs[st.pair]; const nodes = p ? pairNodes(r, p) : null;
-  const pill = r.flagged ? `<span class="pill flag">Flagged · C2 strict</span>` : r.relaxed ? `<span class="pill relax">Relaxed only</span>` : `<span class="pill none">Not flagged</span>`;
+  const pill = `<span class="pill none">not … ${W}</span>` + (r.flagged ? `<span class="pill flag">Flagged · C2 strict</span>` : r.relaxed ? `<span class="pill relax">Relaxed only</span>` : `<span class="pill none">Not flagged</span>`);
   const lii = liiUrl(r.ident);
   // sentence with highlights for the selected pair
   const vp = nodes && (p.strict ? nodes.negVP : (p.rel ? nodes.relaxedVP : null));
@@ -413,19 +470,20 @@ function renderDetail() {
       <td class="mono">${esc(q.coord)}</td><td>${q.conj}</td><td>${q.dist}</td>
       <td>${q.strict ? `<span class="yes">yes</span>` : `<span class="no">no</span>`}</td>
       <td>${q.rel ? `<span class="yes">yes</span>` : `<span class="no">no</span>`}</td>
-      <td>${ifClauseOf(r, q) ? `<span class="yes" style="color:var(--accent)">yes</span>` : `<span class="no">no</span>`}</td></tr>`;
+      <td>${q.inIf ? `<span class="yes" style="color:var(--accent)">yes</span>` : `<span class="no">no</span>`}</td></tr>`;
   }).join("");
-  const rv = reviews[r.id] || {};
+  const rv = reviews[r.key] || {};
   $("detail").querySelector(".inner").innerHTML = `
     <div class="dhead"><h2>${esc(citation(r.ident))}</h2>${pill}</div>
     <div class="meta"><span>${esc(r.src.replace("_", " "))}</span><span>${r.toks.length} tokens</span>
-      <span>${r.pairs.length} (not, and) pair${r.pairs.length === 1 ? "" : "s"}, ${strictN} strict</span>
+      <span>${r.pairs.length} (not, ${W}) pair${r.pairs.length === 1 ? "" : "s"}, ${strictN} strict</span>
       <span>${esc(r.id)}</span>${lii ? `<a href="${lii}" target="_blank" rel="noopener">Open on LII ↗</a>` : ""}</div>
-    <div class="legend"><span class="l-neg">not</span><span class="l-vp">VP headed by not (pair satisfies C2)</span><span class="l-conj">and</span><span class="l-coord">coordination node</span><span class="l-if">if-clause containing the pair</span></div>
+    ${twin ? `<div class="also">This sentence is also in the not … ${other} set (${twin.flagged ? "flagged" : twin.relaxed ? "relaxed only" : "not flagged"}). <button type="button" id="twin">Open it</button></div>` : ""}
+    <div class="legend"><span class="l-neg">not</span><span class="l-vp">VP headed by not (pair satisfies C2)</span><span class="l-conj">${W}</span><span class="l-coord">coordination node</span><span class="l-if">if-clause containing the pair</span></div>
     <div class="text">${textHtml}</div>
-    <div><h3>(not, and) pairs · click one to draw it</h3><div class="tablewrap"><table>
+    <div><h3>(not, ${W}) pairs · click one to draw it</h3><div class="tablewrap"><table>
       <thead><tr><th>pair in context</th><th>not's parent</th><th>coordination</th><th>conjuncts</th><th>distance</th><th>C2 strict</th><th>C2 relaxed</th><th>in if-clause</th></tr></thead>
-      <tbody>${pairRows || `<tr><td colspan="8" class="no">No CC "and" in this parse.</td></tr>`}</tbody></table></div></div>
+      <tbody>${pairRows || `<tr><td colspan="8" class="no">No CC "${W}" in this parse.</td></tr>`}</tbody></table></div></div>
     <div>
       <div class="treebar"><h3>Tree</h3>
         <span class="seg"><button type="button" data-v="focus" aria-pressed="${st.view === "focus"}">Pair view</button><button type="button" data-v="outline" aria-pressed="${st.view === "outline"}">Full outline</button></span>
@@ -434,8 +492,8 @@ function renderDetail() {
       <div class="treebox" id="treebox"></div></div>
     <div class="review"><h3 style="margin:0">My review</h3>
       <div class="marks">
-        <button type="button" class="btn" data-m="yes" aria-pressed="${rv.mark === "yes"}">Negative conjunction <kbd>1</kbd></button>
-        <button type="button" class="btn" data-m="no" aria-pressed="${rv.mark === "no"}">Not a negconj <kbd>2</kbd></button>
+        <button type="button" class="btn" data-m="yes" aria-pressed="${rv.mark === "yes"}">${CONN[r.ds].label} <kbd>1</kbd></button>
+        <button type="button" class="btn" data-m="no" aria-pressed="${rv.mark === "no"}">Not a ${CONN[r.ds].short} <kbd>2</kbd></button>
         <button type="button" class="btn" data-m="unsure" aria-pressed="${rv.mark === "unsure"}">Unsure <kbd>3</kbd></button></div>
       <label for="r-note" class="hint">Notes (scope reading, parser error, …)</label>
       <textarea id="r-note">${esc(rv.note || "")}</textarea>
@@ -446,23 +504,24 @@ function renderDetail() {
   inner.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => { st.view = b.dataset.v; st.expandAll = false; renderDetail(); }));
   $("t-toggle").addEventListener("click", () => { st.expandAll = !st.expandAll; renderDetail(); });
   inner.querySelectorAll(".marks button").forEach(b => b.addEventListener("click", () => setMark(b.dataset.m)));
-  $("r-note").addEventListener("input", e => { reviews[r.id] = { ...(reviews[r.id] || {}), note: e.target.value }; saveReviews(); });
+  $("r-note").addEventListener("input", e => { reviews[r.key] = { ...(reviews[r.key] || {}), note: e.target.value }; saveReviews(); });
+  if (twin) $("twin").addEventListener("click", () => { if (st.ds && st.ds !== twin.ds) { st.ds = ""; $("f-ds").value = ""; drawHeader(); refresh(); } select(twin.key); });
   $("export").addEventListener("click", exportCsv);
   if (nodes) (st.view === "focus" ? drawFocus : drawOutline)(r, p, nodes);
   else $("treebox").innerHTML = `<pre class="outline">${esc(r.tree)}</pre>`;
 }
 function setMark(m) {
-  const r = ROWS.find(x => x.id === st.sel); if (!r) return;
-  const cur = reviews[r.id] || {}; reviews[r.id] = { ...cur, mark: cur.mark === m ? undefined : m }; saveReviews();
-  renderDetail(); const row = document.querySelector(`#list .row[data-id="${CSS.escape(r.id)}"] .cite`);
-  if (row) { const old = row.querySelector(".rv"); if (old) old.remove(); const v = reviews[r.id].mark; if (v) row.insertAdjacentHTML("beforeend", `<span class="rv">${REVIEW_LABEL[v]}</span>`); }
+  const r = findRow(st.sel); if (!r) return;
+  const cur = reviews[r.key] || {}; reviews[r.key] = { ...cur, mark: cur.mark === m ? undefined : m }; saveReviews();
+  renderDetail(); const row = document.querySelector(`#list .row[data-id="${CSS.escape(r.key)}"] .cite`);
+  if (row) { const old = row.querySelector(".rv"); if (old) old.remove(); const v = reviews[r.key].mark; if (v) row.insertAdjacentHTML("beforeend", `<span class="rv">${REVIEW_LABEL[v]}</span>`); }
 }
 function exportCsv() {
   const q = s => `"${String(s ?? "").replace(/"/g, '""')}"`;
-  const lines = [["sent_id", "citation", "identifier", "flagged", "flagged_relaxed", "review", "notes"].join(",")];
-  ROWS.forEach(r => { const v = reviews[r.id]; if (v && (v.mark || v.note)) lines.push([q(r.id), q(citation(r.ident)), q(r.ident), r.flagged, r.relaxed, q(v.mark || ""), q(v.note || "")].join(",")); });
+  const lines = [["connective", "sent_id", "citation", "identifier", "flagged", "flagged_relaxed", "review", "notes"].join(",")];
+  ROWS.forEach(r => { const v = reviews[r.key]; if (v && (v.mark || v.note)) lines.push([r.ds, q(r.id), q(citation(r.ident)), q(r.ident), r.flagged, r.relaxed, q(v.mark || ""), q(v.note || "")].join(",")); });
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
-  a.download = `negconj_reviews_${DATA.run}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  a.download = `negated_connective_reviews.csv`; document.body.appendChild(a); a.click(); a.remove();
 }
 
 /* ---------- pair view (SVG) ---------- */
@@ -532,13 +591,17 @@ function drawOutline(r, p, nodes) {
 /* ---------- keyboard ---------- */
 document.addEventListener("keydown", e => {
   if (e.target.closest("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
-  const i = filtered.findIndex(r => r.id === st.sel);
-  if (e.key === "j" || e.key === "ArrowDown") { if (i < filtered.length - 1) { if (i + 1 >= st.limit) { st.limit += 300; refresh(); } select(filtered[i + 1].id); } e.preventDefault(); }
-  else if (e.key === "k" || e.key === "ArrowUp") { if (i > 0) select(filtered[i - 1].id); e.preventDefault(); }
+  const i = filtered.findIndex(r => r.key === st.sel);
+  if (e.key === "j" || e.key === "ArrowDown") { if (i < filtered.length - 1) { if (i + 1 >= st.limit) { st.limit += 300; refresh(); } select(filtered[i + 1].key); } e.preventDefault(); }
+  else if (e.key === "k" || e.key === "ArrowUp") { if (i > 0) select(filtered[i - 1].key); e.preventDefault(); }
   else if (e.key === "1") setMark("yes"); else if (e.key === "2") setMark("no"); else if (e.key === "3") setMark("unsure");
 });
 
-setup(); refresh();
+Promise.allSettled(DATASETS.map(c => loadScript(`data/${c}/index.js`))).then(res => {
+  const bad = res.map((x, i) => x.status === "rejected" ? DATASETS[i] : null).filter(Boolean);
+  if (!ROWS.length) { $("list").innerHTML = `<p class="loading">Could not load the data files (${bad.join(", ")}).</p>`; return; }
+  setup(); refresh();
+});
 </script>
 </body>
 </html>
