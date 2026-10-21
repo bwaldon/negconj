@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "negconj"
 version = "0.1.0"
-description = "Negative conjunctions (… not … and …) in the U.S. Code: extraction, Stanza parsing, C2 classification"
+description = "Negated connectives (… not … and/or …) in the U.S. Code: extraction, Stanza parsing, C2 classification"
 requires-python = ">=3.12"
 dependencies = [
     "modal==1.6.2",

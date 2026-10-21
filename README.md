@@ -6,9 +6,12 @@ constituency-parsed with Stanza, and the pipeline flags those where *not* is the
 dominates the coordination (criterion C2). The method adapts the negative-disjunction search in the
 Champollion et al. amicus brief in *Campos-Chaves v. Garland* (Nos. 22-674 & 22-884).
 
-**Dashboard:** <https://bwaldon.github.io/negconj/>. Flagged sentences from both runs, with their
-trees. Pick a connective (*and*, *or*, or both) and search or filter by text, citation, title,
-coordination label and position (e.g. inside an *if*-clause).
+**Dashboard:** <https://bwaldon.github.io/negconj/>. All 41,869 flagged sentences from both runs,
+with their trees. Pick a connective (*and*, *or*, or both) and search or filter by text, citation,
+title, unit type, coordination label and position (e.g. inside an *if*-clause, with *not* and the
+coordination both in it). Review marks can be saved in the browser and exported as CSV. The pages
+load per-title tree files on demand, so the site also works opened from disk
+(`site/index.html` after building).
 
 ## Pipeline
 
@@ -21,7 +24,7 @@ word change between them; extraction, segmentation, parsing and C2 are shared co
 | Plan | `negconj/shards.py` | prefilter units containing both *not* and the connective; group sections into GPU shards |
 | Segment | `negconj/segment.py` | Stanza sentence splitting plus a re-merge pass for statutory punctuation; regex `\bnot\b.*\b(and|or)\b` |
 | Parse | `negconj/parse.py` | Stanza constituency parser (`ptb3-revised_electra-large`), one best tree per sentence; matches over 4,000 tokens are recorded as failures, not parsed |
-| Classify | `negconj/classify.py` | C2 strict / relaxed for every (not, connective) pair |
+| Classify | `negconj/classify.py` | C2 for every (not, connective) pair: *not*'s parent is a VP that dominates the coordination node |
 | Report | `negconj/report.py` | consistency checks, stratified review sample, summary, manifest, checksums |
 | Run | `negconj/modal_app.py`, `scripts/launch.py` | Modal orchestration on L4 GPUs; resumable, checkpointed per section |
 
@@ -54,11 +57,12 @@ scripts/pull_results.sh disj                         # -> results_disj/
 | regex matches | 44,517 | 49,546 |
 | parsed | 44,513 | 49,541 |
 | not parsed (> 4,000 tokens) | 4 | 5 |
-| flagged (C2 strict) | 13,246 | 28,623 |
-| flagged (C2 relaxed) | 13,265 | 28,658 |
+| flagged (C2) | 13,246 | 28,623 |
 | regression case | Pulsifer, 18 U.S.C. § 3553(f): flagged | Campos-Chaves, 8 U.S.C. § 1229a(b)(5)(C): flagged |
 
-Per-run detail is in `results*/summary.md` (not committed; produced by the report stage).
+Per-run detail is in `results*/summary.md` (not committed; produced by the report stage). The
+result tables also carry a *relaxed* variant of C2 (skipping unary nodes such as `(ADVP (RB not))`
+above *not*); it adds 19 (*and*) and 35 (*or*) sentences and is not shown on the dashboard.
 
 ## Limitations
 
