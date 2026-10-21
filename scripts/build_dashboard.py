@@ -80,7 +80,7 @@ def build_dataset(conn: str, results: Path, out: Path, only_flagged: bool) -> di
     pairs = pd.read_parquet(results / "pairs.parquet")
     n_total = len(cls)
     if only_flagged:
-        cls = cls[cls["flagged"] | cls["flagged_relaxed"]]
+        cls = cls[cls["flagged"]]
     pairs = pairs[pairs["sent_id"].isin(cls["sent_id"])]
     cc = f"{conn}_index"
     pcols = ["not_index", cc, "not_parent_label", "not_relaxed_parent_label",
@@ -127,7 +127,7 @@ def main() -> None:
     ap.add_argument("--or", dest="or_", type=Path, help="results dir of the negative-disjunction run")
     ap.add_argument("--out", type=Path, default=Path("site"))
     ap.add_argument("--all-matches", action="store_true",
-                    help="include unflagged matches too (default: flagged, strict or relaxed)")
+                    help="include unflagged matches too (default: flagged sentences, C2 strict)")
     a = ap.parse_args()
     datasets = {c: p for c, p in (("and", a.and_), ("or", a.or_)) if p is not None}
     if not datasets:
