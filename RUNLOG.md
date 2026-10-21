@@ -271,3 +271,15 @@ Also a mis-coordination: 29/214(d).
   `results/parses.parquet` when the sent_id, the token list and the model package are all
   identical; anything else is parsed. Counted per shard (`reused`); the reused file's SHA-256 is
   in the disjunction manifest.
+
+### Conjunction run finished (orchestrator call fc-01M5FS9MKC3GERB2RWNXDR86HT, commit d851771)
+- The 3 stalled shards resumed after ~13 min waiting for L4 capacity: 34-000 (451 matches, 343 s),
+  42-002 (705, 713 s), 42-001 (994, 997 s). Total reported GPU 31,635 s.
+- Merge: 144,017 sentences (153,418 raw splits, 9,401 re-merged); **44,517 matches, 44,513 parsed,
+  4 not parsed (too long)**: 42 U.S.C. 1396a (19,468 tokens), 34 U.S.C. 11133 (6,109),
+  42 U.S.C. 671 (6,104), 42 U.S.C. 1395l (5,215). 0 duplicate rows. 308,155 pairs;
+  **flagged 13,246, relaxed 13,265**. Report checks all OK; 122 checksums verified after
+  `scripts/pull_results.sh` → `results/`.
+- Pulsifer: flagged True / relaxed True (unchanged). The 41,559 sentences in the partial results are
+  all present, with identical flags.
+- Modal metered this month after the finish: $17.67 (credits cover it).
