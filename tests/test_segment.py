@@ -86,3 +86,10 @@ def test_segment_units_ids_text_and_match():
     assert sents.loc[0, "n_merged"] == 1 and stats["merges"] == 1
     assert stats["raw_sentences"] == 5 and stats["sentences"] == 4
     assert sents["section"].tolist() == ["/s1", "/s1", "/s2", "/s2"]
+
+
+def test_is_match_per_connective():
+    assert is_match("shall not apply to A or B", "or") and not is_match("shall not apply to A or B")
+    assert not is_match("A or B shall not apply", "or")  # connective before the negation
+    assert not is_match("shall not apply to A nor B", "or") and not is_match("not A and/orB", "or")
+    assert is_match("shall NOT apply to A OR B", "or")

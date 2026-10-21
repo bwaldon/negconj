@@ -2,6 +2,7 @@
 
     python scripts/launch.py --run pilot --titles 29 18 --gpu-budget-seconds 3600
     python scripts/launch.py --run full --gpu-budget-seconds <approved budget>
+    python scripts/launch.py --run disj --conn or --reuse-run full --target-chars 2000000 ...
     python scripts/launch.py --measure-extract 26 42
 
 Relaunching with the same arguments resumes: every stage skips finished work.
@@ -39,6 +40,12 @@ def main() -> None:
                     help="only extract these titles to measure memory/runtime")
     ap.add_argument("--stop-after", default=None, choices=["extract"],
                     help="stop the orchestrator after this stage")
+    ap.add_argument("--conn", default="and", choices=["and", "or"],
+                    help="connective: and (negative conjunction) or or (negative disjunction)")
+    ap.add_argument("--max-tokens", type=int, default=None,
+                    help="token cap; longer matches are recorded as failures, not parsed (default: MAX_GPU_TOKENS)")
+    ap.add_argument("--reuse-run", default=None,
+                    help="reuse trees from this finished run's merged parses where tokens match")
     ap.add_argument("--no-deploy", action="store_true")
     a = ap.parse_args()
 
@@ -51,9 +58,11 @@ def main() -> None:
         call = fn.spawn(a.release or "119-121", a.measure_extract)
     else:
         fn = modal.Function.from_name("negconj", "orchestrate")
+        extra = {"max_tokens": a.max_tokens} if a.max_tokens is not None else {}
         call = fn.spawn(run=a.run, release=a.release, titles=a.titles,
                         target_chars=a.target_chars, gpu_budget_seconds=a.gpu_budget_seconds,
-                        git_commit=commit, min_matches=a.min_matches, stop_after=a.stop_after)
+                        git_commit=commit, min_matches=a.min_matches, stop_after=a.stop_after,
+                        conn=a.conn, reuse_run=a.reuse_run, **extra)
     print(f"spawned {fn.object_id if hasattr(fn, 'object_id') else ''} call {call.object_id} "
           f"(commit {commit[:10]}). Follow with: modal app logs negconj")
     (ROOT / "data").mkdir(exist_ok=True)

@@ -239,3 +239,35 @@ Also a mis-coordination: 29/214(d).
   `.env`, `data/` and `results*/` were never committed.
 - Dashboard published at <https://bwaldon.github.io/negconj/> from an orphan `gh-pages` branch
   (single `index.html`, 41.8 MB): flagged sentences from the 69 finished shards.
+
+## Phase 4 — finish the conjunction run; negative-disjunction run (2026-10-21)
+
+### Length cap for the stuck shards (user decision)
+- Local CPU measurements (ELECTRA, 42 U.S.C. 1395l chapeau sentence, first N tokens):
+  peak RSS above the loaded pipeline +2.4 GiB at 1,000 tokens, +7.3 GiB at 2,000; the 4,000-token
+  prefix and the full 5,215-token sentence were killed on the 24 GB laptop. 42 U.S.C. 1396d's
+  2,767-token sentence: 54 s, +4.1 GiB. Growth is roughly quadratic, so the 19,468-token sentence
+  would need hundreds of GiB; the parser itself has no attention layers (`pattn_num_layers=0`,
+  `use_lattn=False`) and runs under `no_grad`; the profile is dominated by `addmm`.
+- **Decision (user): sentences above a length cap are not parsed.** Cap = **4,000 tokens**
+  (`modal_app.MAX_GPU_TOKENS`): the full run parsed every match up to 3,857 tokens on L4s; every
+  sentence that stalled it was ≥ 5,215 tokens. Over-cap matches are written to
+  `failures/{shard}.jsonl` with error `too_long: N tokens > max_tokens 4000`, so they are counted
+  (`parse_failures_too_long`) and never silently dropped. Applies to both runs.
+
+### Negative disjunction (`conn="or"`), mirroring the conjunction code
+- The user asked that the disjunction run mirror the *code* used for `not … and` (not the
+  work plan). Only the connective changes: prefilter `\bnot\b` & `\bor\b`; sentence regex
+  `\bnot\b.*\bor\b` (case-insensitive, DOTALL); coordination node = parent of a `CC` whose word
+  is `or`; C2 strict / relaxed unchanged. Same extraction, segmentation and re-merge rules, same
+  ELECTRA parser, same checkpointing. Column names follow the connective (`or_index`,
+  `not_before_or`, `n_or_cc`). `conn="and"` (the default) is byte-for-byte the old behaviour.
+- Regression case: *Campos-Chaves*, 8 U.S.C. § 1229a(b)(5)(C) (one condensed-chapeau unit:
+  "… the alien did not receive notice in accordance with paragraph (1) or (2) …").
+- Run `disj` on the Volume (`/data/disj`), its own extraction and shard plan.
+- **Tree reuse.** Parsing does not depend on the connective, and 52.5 M of the 58.6 M `not … or`
+  prefilter chars are in units that also pass the `not … and` prefilter. With `reuse_run="full"`,
+  a disjunction shard takes the tree and xpos from the finished conjunction run's
+  `results/parses.parquet` when the sent_id, the token list and the model package are all
+  identical; anything else is parsed. Counted per shard (`reused`); the reused file's SHA-256 is
+  in the disjunction manifest.

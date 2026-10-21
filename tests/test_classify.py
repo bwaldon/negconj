@@ -79,3 +79,22 @@ def test_classify_frame_keeps_all_rows():
     assert len(sents) == 5 and len(pairs) == 5
     assert sents["flagged"].tolist() == [s for _, s, _ in PLAN_TABLE]
     assert sents["flagged_relaxed"].tolist() == [r for _, _, r in PLAN_TABLE]
+
+
+def test_or_connective_mirrors_and():
+    """The disjunction run uses the same C2 definitions with CC "or"."""
+    for tree_str, strict, relaxed in PLAN_TABLE:
+        or_tree = tree_str.replace("(CC and)", "(CC or)")
+        rows, summ = classify_tree("o", or_tree, conn="or")
+        assert summ["flagged"] is strict and summ["flagged_relaxed"] is relaxed
+        assert summ["n_or_cc"] == 1 and "or_index" in rows[0] and rows[0]["not_before_or"]
+        # an "or" tree has no (not, and) pairs, and vice versa
+        assert classify_tree("o", or_tree, conn="and")[1]["n_pairs"] == 0
+        assert classify_tree("a", tree_str, conn="or")[1]["n_pairs"] == 0
+
+
+def test_classify_frame_or_columns():
+    parses = pd.DataFrame({"sent_id": ["s0"], "tree": [PLAN_TABLE[0][0].replace("(CC and)", "(CC or)")]})
+    pairs, sents = classify_frame(parses, conn="or")
+    assert list(pairs.columns)[2:4] == ["or_index", "not_before_or"]
+    assert "n_or_cc" in sents and bool(sents["flagged"].iloc[0])

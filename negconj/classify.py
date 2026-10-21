@@ -6,8 +6,9 @@ string, so nothing here depends on Stanza's tree API.
 Definitions
 -----------
 not-node           a preterminal whose leaf lowercases to "not".
-coordination node  for each preterminal CC whose leaf lowercases to "and", the
-                   node immediately dominating it.
+coordination node  for each preterminal CC whose leaf lowercases to the
+                   connective ("and", or "or" for the disjunction run), the node
+                   immediately dominating it.
 dominates(a, b)    a is a proper ancestor of b.
 C2 strict          not's parent is labelled VP and dominates the coordination node.
 C2 relaxed         as strict, after first skipping unary projections above not
@@ -22,11 +23,13 @@ from nltk.tree import ParentedTree
 # Children of a coordination node that are not conjuncts.
 NON_CONJUNCT_LABELS = frozenset({"CC", ",", ":", ".", "``", "''", "-LRB-", "-RRB-", "HYPH"})
 
-PAIR_COLUMNS = [
-    "sent_id", "not_index", "and_index", "not_before_and",
-    "not_parent_label", "not_relaxed_parent_label", "coord_label",
-    "n_conjuncts", "tree_distance", "c2_strict", "c2_relaxed",
-]
+def pair_columns(conn: str = "and") -> list[str]:
+    return ["sent_id", "not_index", f"{conn}_index", f"not_before_{conn}",
+            "not_parent_label", "not_relaxed_parent_label", "coord_label",
+            "n_conjuncts", "tree_distance", "c2_strict", "c2_relaxed"]
+
+
+PAIR_COLUMNS = pair_columns("and")
 
 
 def to_tree(s: str) -> ParentedTree:
@@ -46,8 +49,12 @@ def not_nodes(tree: ParentedTree) -> list[ParentedTree]:
     return [p for p in preterminals(tree) if p[0].lower() == "not"]
 
 
+def conn_ccs(tree: ParentedTree, conn: str = "and") -> list[ParentedTree]:
+    return [p for p in preterminals(tree) if p.label() == "CC" and p[0].lower() == conn]
+
+
 def and_ccs(tree: ParentedTree) -> list[ParentedTree]:
-    return [p for p in preterminals(tree) if p.label() == "CC" and p[0].lower() == "and"]
+    return conn_ccs(tree, "and")
 
 
 def dominates(a, b) -> bool:
@@ -87,13 +94,13 @@ def tree_distance(a, b) -> int:
     return (len(pa) - common) + (len(pb) - common)
 
 
-def classify_tree(sent_id: str, tree_str: str) -> tuple[list[dict], dict]:
-    """Return (pair rows, sentence summary) for one parse."""
+def classify_tree(sent_id: str, tree_str: str, conn: str = "and") -> tuple[list[dict], dict]:
+    """Return (pair rows, sentence summary) for one parse; pairs are (not, CC conn)."""
     tree = to_tree(tree_str)
     pts = preterminals(tree)
     leaf_index = {id(p): i for i, p in enumerate(pts)}
     nots = [p for p in pts if p[0].lower() == "not"]
-    ands = [p for p in pts if p.label() == "CC" and p[0].lower() == "and"]
+    ands = [p for p in pts if p.label() == "CC" and p[0].lower() == conn]
     rows = []
     for nn in nots:
         parent = nn.parent()
@@ -103,8 +110,8 @@ def classify_tree(sent_id: str, tree_str: str) -> tuple[list[dict], dict]:
             rows.append({
                 "sent_id": sent_id,
                 "not_index": leaf_index[id(nn)],
-                "and_index": leaf_index[id(cc)],
-                "not_before_and": leaf_index[id(nn)] < leaf_index[id(cc)],
+                f"{conn}_index": leaf_index[id(cc)],
+                f"not_before_{conn}": leaf_index[id(nn)] < leaf_index[id(cc)],
                 "not_parent_label": parent.label() if parent is not None else None,
                 "not_relaxed_parent_label": rparent.label() if rparent is not None else None,
                 "coord_label": coord.label(),
@@ -116,7 +123,7 @@ def classify_tree(sent_id: str, tree_str: str) -> tuple[list[dict], dict]:
     summary = {
         "sent_id": sent_id,
         "n_not": len(nots),
-        "n_and_cc": len(ands),
+        f"n_{conn}_cc": len(ands),
         "n_pairs": len(rows),
         "flagged": any(r["c2_strict"] for r in rows),
         "flagged_relaxed": any(r["c2_relaxed"] for r in rows),
@@ -124,7 +131,7 @@ def classify_tree(sent_id: str, tree_str: str) -> tuple[list[dict], dict]:
     return rows, summary
 
 
-def classify_frame(parses: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def classify_frame(parses: pd.DataFrame, conn: str = "and") -> tuple[pd.DataFrame, pd.DataFrame]:
     """Classify every row of a parses table (needs sent_id, tree).
 
     Returns (pairs, sentences_classified), where sentences_classified is the
@@ -133,11 +140,11 @@ def classify_frame(parses: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     all_rows: list[dict] = []
     summaries: list[dict] = []
     for sid, tree in zip(parses["sent_id"], parses["tree"]):
-        rows, summ = classify_tree(sid, tree)
+        rows, summ = classify_tree(sid, tree, conn)
         all_rows.extend(rows)
         summaries.append(summ)
-    pairs = pd.DataFrame(all_rows, columns=PAIR_COLUMNS)
+    pairs = pd.DataFrame(all_rows, columns=pair_columns(conn))
     summ = pd.DataFrame(summaries, columns=[
-        "sent_id", "n_not", "n_and_cc", "n_pairs", "flagged", "flagged_relaxed"])
+        "sent_id", "n_not", f"n_{conn}_cc", "n_pairs", "flagged", "flagged_relaxed"])
     sentences = parses.merge(summ, on="sent_id", how="left", validate="one_to_one")
     return pairs, sentences
